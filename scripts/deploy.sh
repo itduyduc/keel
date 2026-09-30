@@ -59,10 +59,10 @@ echo "→ $VERSION → $VM"
 "
 
 # not public until the DNS record exists and setup-vm.sh has added the Caddy site
-if [ "$(dig +short plumb.itsduy.com | tail -1)" != "8.235.111.45" ]; then
+if [ "$(dig +short plumb.itsduy.com @"$(dig +short NS itsduy.com | head -1)" | tail -1)" != "8.235.111.45" ]; then
   echo "✅ deployed and running on the VM · ⏳ not public yet: plumb.itsduy.com has no DNS record"; exit 0
 fi
 
-served="$(curl -s --max-time 15 "$URL/version" | python3 -c 'import sys,json; print(json.load(sys.stdin)["version"])' 2>/dev/null || true)"
+served="$(curl -s --max-time 15 --resolve plumb.itsduy.com:443:8.235.111.45 "$URL/version" | python3 -c 'import sys,json; print(json.load(sys.stdin)["version"])' 2>/dev/null || true)"
 if [ "$served" = "$VERSION" ]; then echo "✅ $URL serves $VERSION"
 else echo "❌ $URL serves '${served:-nothing}', expected '$VERSION'"; exit 1; fi

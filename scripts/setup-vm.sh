@@ -20,7 +20,7 @@ G=("$GCLOUD" compute --project="$PROJ")
 
 # Caddy asks Let's Encrypt for a certificate the moment the site exists, and failed
 # validations are rate-limited, so the site is only added once the name resolves here.
-resolved="$(dig +short plumb.itsduy.com | tail -1)"
+resolved="$(dig +short plumb.itsduy.com @"$(dig +short NS itsduy.com | head -1)" | tail -1)"
 dns_ok=0; [ "$resolved" = "8.235.111.45" ] && dns_ok=1
 [ $dns_ok = 1 ] || echo "⏳ plumb.itsduy.com resolves to '${resolved:-nothing}' — setting up everything but the Caddy site; re-run after the DNS record exists"
 
