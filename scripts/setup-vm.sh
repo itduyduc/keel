@@ -6,10 +6,9 @@
 #
 #   bash scripts/setup-vm.sh
 #
-# Before running: plumb.itsduy.com must resolve to the VM (an A record at
-# Hostinger, 8.235.111.45), or Caddy cannot get its certificate.
-# After: fill /etc/plumb.env on the VM (Google client, GitHub secret), then
-# bash scripts/deploy.sh.
+# Everything but the public site works before DNS; the Caddy site is added on
+# the first run after plumb.itsduy.com resolves to the VM (A record at Hostinger,
+# 8.235.111.45). Google sign-in needs PLUMB_GOOGLE_CLIENT_ID/SECRET in /etc/plumb.env.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -19,8 +18,11 @@ GCLOUD="$(command -v gcloud 2>/dev/null || true)"
 [ -n "$GCLOUD" ] || { echo "❌ gcloud not found"; exit 1; }
 G=("$GCLOUD" compute --project="$PROJ")
 
+# Caddy asks Let's Encrypt for a certificate the moment the site exists, and failed
+# validations are rate-limited, so the site is only added once the name resolves here.
 resolved="$(dig +short plumb.itsduy.com | tail -1)"
-[ "$resolved" = "8.235.111.45" ] || { echo "❌ plumb.itsduy.com resolves to '${resolved:-nothing}', not 8.235.111.45 — add the DNS record first"; exit 1; }
+dns_ok=0; [ "$resolved" = "8.235.111.45" ] && dns_ok=1
+[ $dns_ok = 1 ] || echo "⏳ plumb.itsduy.com resolves to '${resolved:-nothing}' — setting up everything but the Caddy site; re-run after the DNS record exists"
 
 tmp="$(mktemp -d)"; trap 'rm -rf "$tmp"' EXIT
 name="plumb-setup-$(date +%s)"; mkdir -p "$tmp/$name"
@@ -46,7 +48,7 @@ cp deploy/plumb.service deploy/Caddyfile.plumb "$tmp/$name/"
   sudo install -m 644 \$src/plumb.service /etc/systemd/system/plumb.service
   sudo systemctl daemon-reload
   sudo systemctl enable plumb >/dev/null 2>&1
-  if ! grep -q 'plumb.itsduy.com' /etc/caddy/Caddyfile; then
+  if [ $dns_ok = 1 ] && ! grep -q 'plumb.itsduy.com' /etc/caddy/Caddyfile; then
     # validate a copy first: a broken live Caddyfile would take todo. and obsidian. down on the next restart
     sudo cp /etc/caddy/Caddyfile /tmp/Caddyfile.new
     printf '\n' | sudo tee -a /tmp/Caddyfile.new >/dev/null
@@ -60,4 +62,4 @@ cp deploy/plumb.service deploy/Caddyfile.plumb "$tmp/$name/"
   command -v sqlite3 >/dev/null || echo '⚠️  sqlite3 is not installed; scripts/backup.sh needs it (sudo apt-get install -y sqlite3)'
   rm -rf \$src
 "
-echo "✅ VM ready. Next: fill PLUMB_GOOGLE_CLIENT_ID/SECRET in /etc/plumb.env, then bash scripts/deploy.sh"
+if [ $dns_ok = 1 ]; then echo "✅ VM ready, Caddy serves plumb.itsduy.com"; else echo "✅ VM ready except the Caddy site (waiting on DNS)"; fi

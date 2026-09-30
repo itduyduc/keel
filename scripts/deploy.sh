@@ -47,8 +47,15 @@ echo "→ $VERSION → $VM"
   sudo systemctl restart plumb; sleep 2
   if systemctl is-active --quiet plumb; then echo '   service active'
   else echo '❌ plumb is not active — the previous build is in /opt/plumb.prev'; sudo journalctl -u plumb -n 30 --no-pager; exit 1; fi
+  onvm=\$(curl -s --max-time 5 http://127.0.0.1:4747/version)
+  case \"\$onvm\" in *\"$VERSION\"*) echo '   answers on the VM with this build' ;; *) echo \"❌ on the VM /version says: \$onvm\"; exit 1 ;; esac
   rm -rf \$src
 "
+
+# not public until the DNS record exists and setup-vm.sh has added the Caddy site
+if [ "$(dig +short plumb.itsduy.com | tail -1)" != "8.235.111.45" ]; then
+  echo "✅ deployed and running on the VM · ⏳ not public yet: plumb.itsduy.com has no DNS record"; exit 0
+fi
 
 served="$(curl -s --max-time 15 "$URL/version" | python3 -c 'import sys,json; print(json.load(sys.stdin)["version"])' 2>/dev/null || true)"
 if [ "$served" = "$VERSION" ]; then echo "✅ $URL serves $VERSION"
