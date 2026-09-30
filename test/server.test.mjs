@@ -53,6 +53,18 @@ test('every property change lands in the activity trail with who and what', asyn
   assert.equal(reopened.body.startedAt, null);
 });
 
+test('autosaving a description logs one activity line per sitting, not one per pause', async () => {
+  const { body: issue } = await duy.post('/api/issues', { title: 'Autosave me' });
+  for (const text of ['D', 'Dr', 'Draft', 'Draft done']) await duy.patch(`/api/issues/${issue.identifier}`, { description: text });
+  const detail = (await duy.get(`/api/issues/${issue.identifier}`)).body;
+  assert.equal(detail.issue.description, 'Draft done');
+  assert.equal(detail.activity.filter((a) => a.kind === 'description').length, 1);
+  // someone else editing is their own line
+  await harshit.patch(`/api/issues/${issue.identifier}`, { description: 'Draft done, reviewed' });
+  const after = (await duy.get(`/api/issues/${issue.identifier}`)).body;
+  assert.equal(after.activity.filter((a) => a.kind === 'description').length, 2);
+});
+
 test('bad input is refused with a reason', async () => {
   assert.equal((await duy.post('/api/issues', { title: '  ' })).status, 400);
   assert.equal((await duy.post('/api/issues', { title: 'x', priority: 9 })).status, 400);

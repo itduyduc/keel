@@ -216,9 +216,6 @@ code { font-family: var(--mono); }
   background: none; color: var(--text-strong); font-size: 22.5px; line-height: 1.3; font-weight: 600; letter-spacing: -0.01em;
 }
 .description { max-width: 660px; min-height: 28px; border-radius: 6px; cursor: text; }
-.description .placeholder { color: var(--text-3); font-size: 15px; margin: 0; }
-.description-editor, .description-editor textarea { max-width: 660px; }
-.description-editor textarea { font-size: 15px; line-height: 1.65; font-family: var(--mono); font-size: 13.5px; }
 .section-head { display: flex; align-items: center; gap: 8px; margin: 36px 0 10px; font-size: 13px; font-weight: 500; color: var(--text); max-width: 660px; }
 .section-head .icon-btn { margin-left: auto; }
 .subissues { max-width: 660px; }
@@ -272,18 +269,23 @@ code { font-family: var(--mono); }
 .composer-foot .muted { margin-right: auto; }
 .comment-edit .composer-foot { margin-top: 8px; }
 
-/* ── editor ─────────────────────────────────────────────────────────────── */
-.editor { position: relative; }
-.editor textarea {
-  display: block; width: 100%; resize: none; overflow: hidden; border: 0; outline: none; background: transparent; padding: 0;
-  color: var(--text); font-size: 14px; line-height: 1.6;
+/* ── the rich editor: same type as reading, so writing looks like the result ── */
+.rich-editor .ProseMirror { outline: none; caret-color: var(--text-strong); min-height: 1.6em; }
+.rich-editor .ProseMirror > :last-child { margin-bottom: 0; }
+.rich-editor .ProseMirror p.is-editor-empty:first-child::before {
+  content: attr(data-placeholder); color: var(--text-3); float: left; height: 0; pointer-events: none;
 }
-.editor textarea::placeholder { color: var(--text-3); }
-.description-editor { border: 1px solid #2c2c30; border-radius: 8px; padding: 12px 14px; background: #161618; }
-.mention-popup {
-  position: absolute; z-index: 50; left: 0; top: 100%; margin-top: 4px; width: 260px; padding: 4px;
-  background: var(--bg-elevated); border: 1px solid #2c2c30; border-radius: 10px; box-shadow: 0 8px 30px rgba(0, 0, 0, 0.5);
-}
+.description .rich-editor .ProseMirror { min-height: 44px; padding-bottom: 6px; }
+.composer .ProseMirror, .comment-edit .ProseMirror { font-size: 14px; min-height: 44px; }
+.comment-edit { border: 1px solid #2c2c30; border-radius: 8px; padding: 8px 10px; background: #141416; }
+.create-description .ProseMirror { font-size: 14px; min-height: 72px; }
+.rich .issue-ref { color: #b4baff; cursor: pointer; }
+.rich a { cursor: pointer; }
+.rich .tableWrapper { overflow-x: auto; margin: 0 0 18px; }
+.rich table { display: table; width: auto; margin: 0; }
+.rich .selectedCell { position: relative; }
+.rich .selectedCell::after { content: ""; position: absolute; inset: 0; background: rgba(94, 106, 210, 0.18); pointer-events: none; }
+.mention-popup-rich { width: 260px; padding: 4px; }
 
 /* ── markdown ───────────────────────────────────────────────────────────── */
 .markdown { font-size: 15px; line-height: 1.6; color: #e3e4e6; user-select: text; overflow-wrap: anywhere; }
@@ -305,10 +307,11 @@ code { font-family: var(--mono); }
 }
 .markdown pre code { background: none; border: 0; padding: 0; font-size: 13px; }
 .markdown table {
-  display: block; width: fit-content; max-width: 100%; overflow-x: auto;
   border-collapse: separate; border-spacing: 0; border: 1px solid #2b2b2d; border-radius: 8px;
   margin: 0 0 18px; font-size: 15px;
 }
+/* a static table scrolls on its own; the editor's sits in a .tableWrapper that scrolls */
+.markdown:not(.rich) table { display: block; width: fit-content; max-width: 100%; overflow-x: auto; }
 .markdown th, .markdown td { min-width: 200px; padding: 5px 12px 5px 10px; border-bottom: 1px solid #2b2b2d; border-right: 1px solid #2b2b2d; text-align: left; vertical-align: top; }
 .markdown th { background: #161616; font-weight: 400; color: #e3e4e6; }
 .markdown tr:last-child td { border-bottom: 0; }
@@ -321,6 +324,13 @@ code { font-family: var(--mono); }
 .markdown img { max-width: 100%; border-radius: 6px; }
 .markdown input[type="checkbox"] { margin: 0 6px 0 -18px; vertical-align: -1px; accent-color: var(--accent); }
 .markdown li:has(> input[type="checkbox"]) { list-style: none; }
+.markdown td > p, .markdown th > p { margin: 0; }
+.markdown ul[data-type="taskList"] { list-style: none; padding-left: 2px; }
+.markdown ul[data-type="taskList"] li { display: flex; align-items: flex-start; gap: 8px; }
+.markdown ul[data-type="taskList"] li > label { margin-top: 1px; user-select: none; }
+.markdown ul[data-type="taskList"] li > div { flex: 1; min-width: 0; }
+.markdown ul[data-type="taskList"] li[data-checked="true"] > div { color: var(--text-2); text-decoration: line-through; }
+.markdown ul[data-type="taskList"] input[type="checkbox"] { margin: 0; accent-color: var(--accent); }
 .mention { color: #b4baff; background: rgba(94, 106, 210, 0.16); border-radius: 4px; padding: 0 3px; white-space: nowrap; }
 .markdown a.issue-ref { color: #b4baff; }
 

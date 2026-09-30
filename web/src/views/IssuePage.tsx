@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { useApp, loadDetail, updateIssue, addComment, editComment, deleteComment, toggleReaction } from '../state';
+import { useApp, loadDetail, updateIssue, patchIssue, addComment, editComment, deleteComment, toggleReaction } from '../state';
 import { setUi, useUi, openCreate } from '../ui';
 import { navigate } from '../router';
 import { issuePickers, cycleProgress } from '../pickers';
@@ -7,7 +7,7 @@ import { copyBranch, copyId, copyLink, contextMenu } from '../actions';
 import { StatusIcon, PriorityIcon, CycleIcon, PrIcon, ProjectIcon, TeamIcon, Icon, prColor } from '../icons';
 import { Avatar, LabelChip, ProjectChip } from '../components/bits';
 import { Markdown } from '../components/Markdown';
-import { Editor } from '../components/Editor';
+import { RichEditor, type RichEditorHandle } from '../components/RichEditor';
 import { openMenu, anchorOf } from '../components/Menu';
 import { PRIORITY_NAMES, ago, fullTime, dayLabel, isOverdue, isClosed, estimateLabel, cycleSpan, sortIssues } from '../util';
 import type { Activity, Bootstrap, Comment, Issue } from '../types';
@@ -110,33 +110,14 @@ function Title({ issue }: { issue: Issue }) {
 }
 
 function Description({ issue }: { issue: Issue }) {
-  const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState(issue.description);
-  const cancelled = useRef(false);
-  const start = () => { setDraft(issue.description); cancelled.current = false; setEditing(true); };
-  const finish = () => {
-    setEditing(false);
-    if (cancelled.current) return;
-    if (draft !== issue.description) updateIssue(issue, { description: draft });
-  };
-  if (editing) {
-    return (
-      <Editor
-        className="description-editor"
-        value={draft}
-        onChange={setDraft}
-        autoFocus
-        minRows={4}
-        placeholder="Add description… (markdown)"
-        onBlur={finish}
-        onSubmit={() => (document.activeElement as HTMLElement)?.blur()}
-        onCancel={() => { cancelled.current = true; (document.activeElement as HTMLElement)?.blur(); }}
-      />
-    );
-  }
+  // always editable, like Linear: no view/edit switch, saved as you pause
   return (
-    <div className="description" onClick={(e) => { if (!(e.target as HTMLElement).closest('a')) start(); }}>
-      {issue.description.trim() ? <Markdown source={issue.description} /> : <p className="placeholder">Add description…</p>}
+    <div className="description">
+      <RichEditor
+        value={issue.description}
+        placeholder="Add description…"
+        onChange={(md) => patchIssue(issue.id, { description: md })}
+      />
     </div>
   );
 }
@@ -170,12 +151,14 @@ function SubIssues({ issue, data }: { issue: Issue; data: Bootstrap }) {
 
 // ── activity and comments, in one timeline ─────────────────────────────────
 function Timeline({ issue, data, comments, activity }: { issue: Issue; data: Bootstrap; comments?: Comment[]; activity?: Activity[] }) {
-  const [draft, setDraft] = useState('');
+  const composer = useRef<RichEditorHandle>(null);
+  const [empty, setEmpty] = useState(true);
   const [sending, setSending] = useState(false);
   const submit = async () => {
-    if (!draft.trim() || sending) return;
+    const body = composer.current?.getMarkdown().trim() || '';
+    if (!body || sending) return;
     setSending(true);
-    if (await addComment(issue, draft)) setDraft('');
+    if (await addComment(issue, body)) { composer.current?.clear(); setEmpty(true); }
     setSending(false);
   };
   const items = [
@@ -189,10 +172,10 @@ function Timeline({ issue, data, comments, activity }: { issue: Issue; data: Boo
       {!activity && <div className="muted small">Loading…</div>}
       {items.map((it) => ('a' in it && it.a ? <ActivityLine key={it.id} a={it.a} data={data} /> : <CommentCard key={it.id} c={(it as any).c} data={data} />))}
       <div className="composer">
-        <Editor value={draft} onChange={setDraft} onSubmit={submit} placeholder="Leave a comment…" minRows={2} />
+        <RichEditor ref={composer} value="" onSubmit={submit} onEmptyChange={setEmpty} placeholder="Leave a comment…" />
         <div className="composer-foot">
-          <span className="muted small">Markdown · @ to mention · ⌘↵ to send</span>
-          <button className="btn primary small" disabled={!draft.trim() || sending} onClick={submit}>Comment</button>
+          <span className="muted small">@ to mention · ⌘↵ to send</span>
+          <button className="btn primary small" disabled={empty || sending} onClick={submit}>Comment</button>
         </div>
       </div>
     </div>
@@ -249,8 +232,11 @@ function CommentCard({ c, data }: { c: Comment; data: Bootstrap }) {
   const author = data.users.find((u) => u.id === c.userId);
   const mine = c.userId === data.me.id;
   const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState(c.body);
-  const save = async () => { if (draft.trim() && (await editComment(c, draft))) setEditing(false); };
+  const editor = useRef<RichEditorHandle>(null);
+  const save = async () => {
+    const body = editor.current?.getMarkdown().trim() || '';
+    if (body && (body === c.body || (await editComment(c, body)))) setEditing(false);
+  };
   return (
     <div className="comment" id={`comment-${c.id}`}>
       <div className="comment-head">
@@ -259,13 +245,13 @@ function CommentCard({ c, data }: { c: Comment; data: Bootstrap }) {
         <span className="muted" title={fullTime(c.createdAt)}>{ago(c.createdAt)}{c.editedAt ? ' · edited' : ''}</span>
         <span className="comment-tools">
           <button className="icon-btn" title="React" onClick={(e) => reactMenu(c, e.currentTarget)}><Icon name="smile" size={14} /></button>
-          {mine && <button className="icon-btn" title="Edit" onClick={() => { setDraft(c.body); setEditing(true); }}><Icon name="edit" size={14} /></button>}
+          {mine && <button className="icon-btn" title="Edit" onClick={() => setEditing(true)}><Icon name="edit" size={14} /></button>}
           {(mine || data.me.role === 'admin') && <button className="icon-btn" title="Delete" onClick={() => { if (confirm('Delete this comment?')) deleteComment(c); }}><Icon name="trash" size={14} /></button>}
         </span>
       </div>
       {editing ? (
         <div className="comment-edit">
-          <Editor value={draft} onChange={setDraft} autoFocus onSubmit={save} onCancel={() => setEditing(false)} minRows={2} />
+          <RichEditor ref={editor} value={c.body} autoFocus onSubmit={save} onCancel={() => setEditing(false)} />
           <div className="composer-foot">
             <button className="btn ghost small" onClick={() => setEditing(false)}>Cancel</button>
             <button className="btn primary small" onClick={save}>Save</button>

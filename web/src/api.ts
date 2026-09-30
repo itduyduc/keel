@@ -12,15 +12,21 @@ let onSignedOut: () => void = () => {};
 export const setSignedOutHandler = (fn: () => void) => { onSignedOut = fn; };
 
 export async function api<T>(method: string, path: string, body?: unknown): Promise<T> {
-  const r = await fetch(path, {
-    method,
-    credentials: 'same-origin',
-    headers: {
-      'x-requested-with': 'plumb',
-      ...(body !== undefined ? { 'content-type': 'application/json' } : {}),
-    },
-    body: body !== undefined ? JSON.stringify(body) : undefined,
-  });
+  let r: Response;
+  try {
+    r = await fetch(path, {
+      method,
+      credentials: 'same-origin',
+      headers: {
+        'x-requested-with': 'plumb',
+        ...(body !== undefined ? { 'content-type': 'application/json' } : {}),
+      },
+      body: body !== undefined ? JSON.stringify(body) : undefined,
+    });
+  } catch {
+    // WebKit says only "Load failed": the request never reached the server
+    throw new ApiError(0, method === 'GET' ? "Can't reach Plumb" : "Can't reach Plumb — not saved");
+  }
   if (r.status === 401) {
     onSignedOut();
     throw new ApiError(401, 'Signed out');

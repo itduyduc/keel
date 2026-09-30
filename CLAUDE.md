@@ -52,6 +52,19 @@ GitHub org webhook ─────────────────▶  /gith
 
 ## Gotchas
 
+- **The editor is TipTap (ProseMirror, like Linear's) saving plain markdown** via `@tiptap/markdown`,
+  which TipTap calls an early release. Its raw output padded tables, turned `&` into `&amp;` in
+  cells and `~10s` into `\~10s`; `tidyMarkdown()` in `RichEditor.tsx` puts that back. It only saves
+  after a person types, so opening an issue never rewrites its description. Check fidelity with
+  `plumbDebug.roundTrip(md)` in the page console.
+- TipTap's `focus('end')` reports success without taking focus from another field; `focusEnd()`
+  focuses the view itself.
+- Testing the editor through browser automation: a `type` action inserts text in one go, which
+  skips markdown shortcuts (`**bold**` stays literal). Feed characters through `handleTextInput`
+  one at a time, the way a keyboard does, before calling a shortcut broken.
+- The local server started from a Claude session dies with that session; the app then shows
+  "Can't reach Plumb — not saved". The cure is the VM, not a launchd job for a dev server.
+
 - Headless Chrome never finishes loading a signed-in page: the live-update stream keeps it
   busy, so `--screenshot`/`--virtual-time-budget` hang. Drive it over the DevTools protocol
   and capture after a fixed wait.

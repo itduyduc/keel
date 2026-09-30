@@ -538,7 +538,15 @@ export function createStore(db, { broadcast = () => {}, version = 'dev' } = {}) 
       const set = {};
       const log = (kind, from, to, meta) => acts.push(addActivity(row.id, actor, kind, from, to, meta));
       if (data.title !== undefined && data.title !== row.title) { set.title = data.title; log('title', row.title, data.title); }
-      if (data.description !== undefined && data.description !== row.description) { set.description = data.description; log('description'); }
+      if (data.description !== undefined && data.description !== row.description) {
+        set.description = data.description;
+        // the editor saves as you pause; one "updated the description" per sitting, not one per pause
+        const last = st('SELECT * FROM activity WHERE issue_id = ? ORDER BY id DESC LIMIT 1').get(row.id);
+        const sameSitting = last && last.kind === 'description' && last.actor_kind === actor.kind
+          && last.actor_id === actorUserId(actor) && Date.now() - Date.parse(last.created_at) < 10 * 60_000;
+        if (sameSitting) st('UPDATE activity SET created_at = ? WHERE id = ?').run(now(), last.id);
+        else log('description');
+      }
       if (data.status_id !== undefined && data.status_id !== row.status_id) {
         set.status_id = data.status_id;
         Object.assign(set, statusStamps(row, data.status_id));

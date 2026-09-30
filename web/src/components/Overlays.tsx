@@ -3,7 +3,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useApp, createIssue, getState } from '../state';
 import { useUi, setUi, contextIssueId, openCreate } from '../ui';
 import { navigate } from '../router';
-import { Editor } from './Editor';
+import { RichEditor, type RichEditorHandle } from './RichEditor';
 import { Avatar, Kbd, LabelDot } from './bits';
 import { StatusIcon, PriorityIcon, ProjectIcon, CycleIcon, TeamIcon, Icon } from '../icons';
 import { pickStatus, pickPriority, pickAssignee, pickLabels, pickProject, pickCycle, pickEstimate, pickDueDate, pickParent, issuePickers } from '../pickers';
@@ -23,7 +23,7 @@ function CreateDialog({ defaults }: { defaults: IssuePatch }) {
   const { data } = useApp();
   const d = data!;
   const [title, setTitle] = useState('');
-  const [description, setDescription] = useState('');
+  const descRef = useRef<RichEditorHandle>(null);
   const [p, setP] = useState<IssuePatch>({ statusId: d.team.defaultStatusId, priority: 0, labelIds: [], ...defaults });
   const [more, setMore] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -38,11 +38,11 @@ function CreateDialog({ defaults }: { defaults: IssuePatch }) {
   const submit = async () => {
     if (!title.trim() || busy) return;
     setBusy(true);
-    const issue = await createIssue({ ...p, title, description });
+    const issue = await createIssue({ ...p, title, description: descRef.current?.getMarkdown().trim() || '' });
     setBusy(false);
     if (!issue) return;
     toast(`Created ${issue.identifier}`);
-    if (more) { setTitle(''); setDescription(''); titleRef.current?.focus(); }
+    if (more) { setTitle(''); descRef.current?.clear(); titleRef.current?.focus(); }
     else close();
   };
 
@@ -58,6 +58,8 @@ function CreateDialog({ defaults }: { defaults: IssuePatch }) {
   return (
     <div className="overlay" onMouseDown={(e) => { if (e.target === e.currentTarget) close(); }}>
       <div className="dialog create" onKeyDown={(e) => {
+        // the editor handles its own ⌘↵ and Esc (and the @ picker's); acting twice would create twice
+        if (e.defaultPrevented) return;
         if (e.key === 'Escape') { e.stopPropagation(); close(); }
         if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); submit(); }
       }}>
@@ -68,8 +70,8 @@ function CreateDialog({ defaults }: { defaults: IssuePatch }) {
           <button className="icon-btn dialog-close" onClick={close}><Icon name="x" size={14} /></button>
         </div>
         <input ref={titleRef} className="create-title" placeholder="Issue title" value={title} onChange={(e) => setTitle(e.target.value)}
-          onKeyDown={(e) => { if (e.key === 'Enter' && !e.metaKey && !e.ctrlKey) { e.preventDefault(); (document.querySelector('.create .editor textarea') as HTMLElement)?.focus(); } }} />
-        <Editor className="create-description" value={description} onChange={setDescription} placeholder="Add description… (markdown, @ to mention)" minRows={3} onSubmit={submit} />
+          onKeyDown={(e) => { if (e.key === 'Enter' && !e.metaKey && !e.ctrlKey) { e.preventDefault(); descRef.current?.focus(); } }} />
+        <RichEditor ref={descRef} className="create-description" value="" placeholder="Add description…" onSubmit={submit} onCancel={close} />
         <div className="prop-chips">
           {chip(<><StatusIcon status={status} statuses={d.statuses} /> {status?.name}</>, (el) => pickStatus(p.statusId!, el, (v) => upd({ statusId: v })))}
           {chip(<><PriorityIcon priority={p.priority || 0} /> {p.priority ? PRIORITY_NAMES[p.priority] : 'Priority'}</>, (el) => pickPriority(p.priority || 0, el, (v) => upd({ priority: v })), !p.priority)}

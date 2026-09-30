@@ -129,6 +129,12 @@ export async function updateIssue(issue: Issue, change: IssuePatch) {
   }
 }
 
+// by id: a debounced save must not optimistically replay an older copy of the issue
+export function patchIssue(id: number, change: IssuePatch) {
+  const current = state.data?.issues.find((x) => x.id === id);
+  if (current) return updateIssue(current, change);
+}
+
 export async function createIssue(input: IssuePatch & { title: string }) {
   try {
     const issue = await post<Issue>('/api/issues', input);
