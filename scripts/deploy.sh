@@ -47,8 +47,14 @@ echo "→ $VERSION → $VM"
   sudo systemctl restart plumb; sleep 2
   if systemctl is-active --quiet plumb; then echo '   service active'
   else echo '❌ plumb is not active — the previous build is in /opt/plumb.prev'; sudo journalctl -u plumb -n 30 --no-pager; exit 1; fi
-  onvm=\$(curl -s --max-time 5 http://127.0.0.1:4747/version)
-  case \"\$onvm\" in *\"$VERSION\"*) echo '   answers on the VM with this build' ;; *) echo \"❌ on the VM /version says: \$onvm\"; exit 1 ;; esac
+  # node takes a couple of seconds to listen; a bare curl under set -e ended the script silently (2026-09-30)
+  onvm=''
+  for i in 1 2 3 4 5 6 7 8 9 10; do
+    onvm=\$(curl -s --max-time 2 http://127.0.0.1:4747/version || true)
+    case \"\$onvm\" in *\"$VERSION\"*) break ;; esac
+    sleep 1
+  done
+  case \"\$onvm\" in *\"$VERSION\"*) echo '   answers on the VM with this build' ;; *) echo \"❌ on the VM /version says: '\$onvm'\"; exit 1 ;; esac
   rm -rf \$src
 "
 
