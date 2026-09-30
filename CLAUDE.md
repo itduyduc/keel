@@ -46,9 +46,11 @@ GitHub org webhook ─────────────────▶  /gith
   merged or closed with ≥1 merged → Done; nothing leaves Done/Canceled/Duplicate.
 - **Cycles are computed, not stored**: weekly from Monday 2026-08-31 00:00 Pacific, same numbers as
   Linear's. Unfinished issues in an ended cycle roll into the current one every minute.
-- **Adopted from `Projects/Personal/CLAUDE.md`** (it does not load here): one Mac-app instance,
-  a diagnostics log (`~/Library/Logs/Plumb/plumb.log`), notarize with the ASC API key.
-- Git: this repo is outside `Projects/Personal`, so the global rules apply: commit freely, never push.
+- **Lives in `Projects/Personal`** (moved there 2026-09-30, Duy's word), so `Personal/CLAUDE.md`
+  applies: one Mac-app instance, a diagnostics log (`~/Library/Logs/Plumb/plumb.log`), the ASC API
+  key for signing, and its git flow (a branch in its own worktree for anything beyond a quick edit,
+  merge to `main`, never push; `duy-merge`). Its "Duy My" naming and suite icon rules do not:
+  Plumb is the team's tool, and Duy named it.
 
 ## Gotchas
 
