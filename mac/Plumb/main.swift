@@ -114,6 +114,77 @@ struct Server {
     }
 }
 
+// MARK: - Window
+
+/// A title-bar double-click maximizes, and the next one puts the window back
+/// (Duy, 2026-09-29). macOS's default action filled the screen and then stayed
+/// there. Minimize and Do Nothing in System Settings ▸ Desktop & Dock are still
+/// honored; only the maximize action becomes a toggle.
+final class PlumbWindow: NSWindow {
+    private var restoreFrame: NSRect?
+
+    override func sendEvent(_ event: NSEvent) {
+        if event.type == .leftMouseDown, event.clickCount == 2, inTitleBar(event.locationInWindow) {
+            titleBarDoubleClicked()
+            return
+        }
+        super.sendEvent(event)
+    }
+
+    /// Above the page and not on a traffic light. The title text is a control
+    /// too, but only buttons are exempt, so a double-click on "Plumb" counts.
+    private func inTitleBar(_ point: NSPoint) -> Bool {
+        guard point.y >= contentLayoutRect.maxY else { return false }
+        var view = contentView?.superview?.hitTest(point)
+        while let v = view {
+            if v is NSButton { return false }
+            view = v.superview
+        }
+        return true
+    }
+
+    private func titleBarDoubleClicked() {
+        switch UserDefaults.standard.string(forKey: "AppleActionOnDoubleClick") {
+        case "Minimize": performMiniaturize(nil)
+        case "None": break
+        default: toggleFill()
+        }
+    }
+
+    private func toggleFill() {
+        guard let visible = (screen ?? NSScreen.main)?.visibleFrame else { return }
+        let filled = abs(frame.minX - visible.minX) < 2 && abs(frame.minY - visible.minY) < 2
+            && abs(frame.width - visible.width) < 2 && abs(frame.height - visible.height) < 2
+        if filled {
+            // filled some other way (Window ▸ Fill) with nothing to go back to: a sensible middle size
+            let back = restoreFrame ?? visible.insetBy(dx: visible.width * 0.12, dy: visible.height * 0.1)
+            restoreFrame = nil
+            Log.write("title bar double-click: restore to \(Int(back.width))×\(Int(back.height))")
+            setFrame(back, display: true, animate: true)
+        } else {
+            restoreFrame = frame
+            Log.write("title bar double-click: fill \(Int(visible.width))×\(Int(visible.height))")
+            setFrame(visible, display: true, animate: true)
+        }
+    }
+
+    /// `--test-titlebar-double-click`: two synthetic double-clicks in the title
+    /// bar, the frame logged after each, then exit. One-shot, so it may run
+    /// beside the live app.
+    func selfTestTitleBarDoubleClick() {
+        let size = { (f: NSRect) in "\(Int(f.minX)),\(Int(f.minY)) \(Int(f.width))×\(Int(f.height))" }
+        Log.write("test: start \(size(frame)) · visible \(size((screen ?? NSScreen.main)?.visibleFrame ?? .zero))")
+        for round in 1...2 {
+            let point = NSPoint(x: frame.width / 2, y: frame.height - 10)   // window coordinates, in the bar
+            let event = NSEvent.mouseEvent(with: .leftMouseDown, location: point, modifierFlags: [],
+                                           timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: windowNumber,
+                                           context: nil, eventNumber: 0, clickCount: 2, pressure: 1)!
+            sendEvent(event)
+            Log.write("test: after double-click \(round): \(size(frame))")
+        }
+    }
+}
+
 // MARK: - App
 
 @MainActor
@@ -144,6 +215,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
         buildMenu()
         buildWindow()
         showWindow()
+        if CommandLine.arguments.contains("--test-titlebar-double-click"), let w = window as? PlumbWindow {
+            Task { @MainActor in
+                try? await Task.sleep(for: .seconds(1))
+                w.selfTestTitleBarDoubleClick()
+                Log.flush()
+                NSApp.terminate(nil)
+            }
+            return
+        }
         web.load(URLRequest(url: server.url))
     }
 
@@ -192,7 +272,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
         web.setValue(false, forKey: "drawsBackground")              // no white flash before the page paints
         if #available(macOS 13.3, *) { web.isInspectable = true }   // Safari ▸ Develop ▸ Plumb
 
-        window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 1280, height: 820),
+        window = PlumbWindow(contentRect: NSRect(x: 0, y: 0, width: 1280, height: 820),
                           styleMask: [.titled, .closable, .miniaturizable, .resizable],
                           backing: .buffered, defer: false)
         window.title = "Plumb"
