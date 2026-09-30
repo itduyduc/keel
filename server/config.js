@@ -25,7 +25,6 @@ export const config = {
   webDir: env.PLUMB_WEB_DIR || path.join(ROOT, 'web', 'dist'),
   // Dev login skips Google. It only ever answers on loopback, and only with this flag.
   devLogin: env.PLUMB_DEV_LOGIN === '1',
-  trustProxy: env.PLUMB_TRUST_PROXY === '1',
   google: {
     clientId: env.PLUMB_GOOGLE_CLIENT_ID || '',
     clientSecret: env.PLUMB_GOOGLE_CLIENT_SECRET || '',

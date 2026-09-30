@@ -78,7 +78,12 @@ function Menu({ cfg }: { cfg: MenuConfig }) {
     setPos({ left, top });
   }, [cfg, options.length]);
 
-  useEffect(() => { input.current?.focus(); }, []);
+  // focus goes back where it came from, so ⌘↵ still submits the dialog a picker was opened in
+  useEffect(() => {
+    const prev = document.activeElement as HTMLElement | null;
+    input.current?.focus();
+    return () => { if (prev && prev !== document.body && document.contains(prev)) prev.focus({ preventScroll: true }); };
+  }, []);
   useEffect(() => { setActive(0); }, [query]);
 
   useEffect(() => {

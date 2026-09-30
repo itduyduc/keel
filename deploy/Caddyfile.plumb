@@ -1,0 +1,7 @@
+# Appended to /etc/caddy/Caddyfile by scripts/setup-vm.sh.
+# Plumb binds 127.0.0.1:4747; only Caddy is public. Caddy streams text/event-stream
+# without buffering, which the live updates need.
+plumb.itsduy.com {
+	encode zstd gzip
+	reverse_proxy 127.0.0.1:4747
+}
