@@ -53,11 +53,12 @@ GitHub org webhook ─────────────────▶  /gith
   merged or closed with ≥1 merged → Done; nothing leaves Done/Canceled/Duplicate.
 - **Cycles are computed, not stored**: weekly from Monday 2026-08-31 00:00 Pacific, same numbers as
   Linear's. Unfinished issues in an ended cycle roll into the current one every minute.
-- **Lives in `Projects/Personal/dev/`** (2026-09-30): never pushed, so `dev/` by Personal's
+- **Lives in `Projects/Personal/dev/duy-my-linear`** (2026-09-30; Duy renamed the folder from
+  `plumb` on 2026-10-01, while the app, its domain and the VM paths still say Plumb). Never pushed, so `dev/` by Personal's
   prod/dev rule — the first push moves it to `prod/` in the same turn, with that section's path
   checklist. `Personal/CLAUDE.md` applies: one Mac-app instance, a diagnostics log (`~/Library/Logs/Plumb/plumb.log`), the ASC API
   key for signing, and its git flow (a branch in its own worktree for anything beyond a quick edit,
-  merge to `main`, never push; `duy-merge`). Its "Duy My" naming and suite icon rules do not:
+  merge to `main`, never push; `duy-merge`). The suite's display-name and icon rules do not:
   Plumb is the team's tool, and Duy named it.
 
 ## Gotchas
