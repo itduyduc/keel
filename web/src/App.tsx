@@ -143,7 +143,7 @@ function Login() {
           Continue with Google
         </button>
         {error && <p className="login-error">{error}</p>}
-        <p className="muted small">Only invited teammates can sign in.</p>
+        <p className="muted small">Only invited teammates can sign in. <a className="login-privacy" href="/privacy.html">Privacy</a></p>
       </div>
     </div>
   );
