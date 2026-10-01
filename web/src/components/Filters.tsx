@@ -6,10 +6,10 @@ import { openMenu, anchorOf } from './Menu';
 import { StatusIcon, PriorityIcon, ProjectIcon, CycleIcon, Icon } from '../icons';
 import { Avatar, LabelDot } from './bits';
 import { PRIORITY_NAMES } from '../util';
-import type { Issue } from '../types';
+import type { FilterKey, FilterSet, Issue } from '../types';
 
-export type FilterKey = 'status' | 'assignee' | 'priority' | 'label' | 'project' | 'cycle';
-export type Filters = Partial<Record<FilterKey, (number | 'none')[]>>;
+export type { FilterKey };
+export type Filters = FilterSet;
 
 const FIELDS: { key: FilterKey; label: string; icon: string }[] = [
   { key: 'status', label: 'Status', icon: 'issues' },

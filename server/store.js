@@ -316,6 +316,70 @@ export function createStore(db, { broadcast = () => {}, version = 'dev' } = {}) 
     return serializeProject(st('SELECT * FROM projects WHERE id = ?').get(p.id));
   }
 
+  // ── saved views ─────────────────────────────────────────────────────────
+  // The same six filters the list offers, saved under a name for everyone.
+  const FILTER_KEYS = ['status', 'assignee', 'priority', 'label', 'project', 'cycle'];
+  function cleanFilters(f) {
+    if (f === undefined || f === null) return {};
+    if (typeof f !== 'object' || Array.isArray(f)) throw bad('filters is an object like {"assignee": [3]}');
+    const out = {};
+    for (const [k, v] of Object.entries(f)) {
+      if (!FILTER_KEYS.includes(k)) throw bad(`Unknown filter "${k}". Filters: ${FILTER_KEYS.join(', ')}`);
+      if (v === undefined || v === null) continue;
+      if (!Array.isArray(v) || v.length > 100) throw bad(`filters.${k} is a list of ids`);
+      const vals = [...new Set(v.map((x) => (x === 'none' ? 'none' : Number(x))))];
+      if (vals.some((x) => x !== 'none' && !Number.isInteger(x))) throw bad(`filters.${k} holds ids or "none"`);
+      if (vals.length) out[k] = vals;
+    }
+    return out;
+  }
+  const serializeView = (v) => ({
+    id: v.id, name: v.name, description: v.description, icon: v.icon, color: v.color,
+    filters: JSON.parse(v.filters || '{}'), creatorId: v.creator_id, sortOrder: v.sort_order, createdAt: v.created_at, updatedAt: v.updated_at,
+  });
+  const listViews = () => st('SELECT * FROM views WHERE deleted_at IS NULL ORDER BY sort_order, id').all().map(serializeView);
+  const viewName = (n) => {
+    const name = String(n ?? '').trim().slice(0, 60);
+    if (!name) throw bad('Name the view');
+    return name;
+  };
+  const viewIcon = (i) => {
+    if (!/^[a-z]{1,20}$/.test(String(i))) throw bad('icon is an icon name');
+    return String(i);
+  };
+
+  function createView(actor, { name, description = null, icon = 'layers', color = '#9b9b9e', filters = {} } = {}) {
+    const t = now();
+    const order = (st('SELECT MAX(sort_order) AS m FROM views').get().m ?? 0) + 1;
+    const r = st(`INSERT INTO views (name, description, icon, color, filters, creator_id, sort_order, created_at, updated_at)
+                  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+      .run(viewName(name), description ? String(description).slice(0, 200) : null, viewIcon(icon), hexColor(color),
+        JSON.stringify(cleanFilters(filters)), actorUserId(actor), order, t, t);
+    broadcast({ type: 'views', views: listViews() });
+    return serializeView(st('SELECT * FROM views WHERE id = ?').get(r.lastInsertRowid));
+  }
+
+  function updateView(actor, id, patch = {}) {
+    const v = st('SELECT * FROM views WHERE id = ? AND deleted_at IS NULL').get(Number(id));
+    if (!v) throw notFound('No such view');
+    const name = patch.name !== undefined ? viewName(patch.name) : v.name;
+    const description = patch.description !== undefined ? (patch.description ? String(patch.description).slice(0, 200) : null) : v.description;
+    const icon = patch.icon !== undefined ? viewIcon(patch.icon) : v.icon;
+    const color = patch.color !== undefined ? hexColor(patch.color) : v.color;
+    const filters = patch.filters !== undefined ? JSON.stringify(cleanFilters(patch.filters)) : v.filters;
+    st('UPDATE views SET name = ?, description = ?, icon = ?, color = ?, filters = ?, updated_at = ? WHERE id = ?')
+      .run(name, description, icon, color, filters, now(), v.id);
+    broadcast({ type: 'views', views: listViews() });
+    return serializeView(st('SELECT * FROM views WHERE id = ?').get(v.id));
+  }
+
+  function deleteView(actor, id) {
+    const r = st('UPDATE views SET deleted_at = ? WHERE id = ? AND deleted_at IS NULL').run(now(), Number(id));
+    if (!r.changes) throw notFound('No such view');
+    broadcast({ type: 'views', views: listViews() });
+    return { deleted: Number(id) };
+  }
+
   // ── issues ─────────────────────────────────────────────────────────────
   const serializePr = (p) => ({
     id: p.id, repo: p.repo, number: p.number, title: p.title, url: p.url, branch: p.branch, author: p.author,
@@ -764,6 +828,7 @@ export function createStore(db, { broadcast = () => {}, version = 'dev' } = {}) 
       users: listUsers(),
       labels: listLabels(),
       projects: listProjects(),
+      views: listViews(),
       cycles: cycles(),
       issues: listIssues(),
     };
@@ -774,6 +839,7 @@ export function createStore(db, { broadcast = () => {}, version = 'dev' } = {}) 
     serializeUser, listUsers, userRow, userByEmail, inviteUser, updateUser, ensureAdmins, recordSignIn,
     createSession, userForSession, deleteSession, listTokens, createToken, revokeToken, userForToken,
     listLabels, createLabel, updateLabel, listProjects, createProject, updateProject,
+    listViews, createView, updateView, deleteView,
     listIssues, getIssue, getIssueById, createIssue, updateIssue, deleteIssue, issueDetail, listActivity,
     listComments, addComment, editComment, deleteComment, toggleReaction,
     upsertPullRequest, linkPullRequest, notePullRequestState, issueIdsForPr, prsForIssue, refreshIssue,

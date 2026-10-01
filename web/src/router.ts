@@ -29,6 +29,7 @@ export type Route =
   | { name: 'project'; id: number }
   | { name: 'cycles' }
   | { name: 'cycle'; number: number }
+  | { name: 'view'; id: string } // a number, or 'new'
   | { name: 'settings'; section: string };
 
 export function parseRoute(path: string): Route {
@@ -42,6 +43,7 @@ export function parseRoute(path: string): Route {
     case 'project': return { name: 'project', id: Number(parts[1]) };
     case 'cycles': return { name: 'cycles' };
     case 'cycle': return { name: 'cycle', number: Number(parts[1]) };
+    case 'view': return { name: 'view', id: parts[1] || 'new' };
     case 'settings': return { name: 'settings', section: parts[1] || 'profile' };
     default: {
       const tab = q.get('tab') || parts[1];

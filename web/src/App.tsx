@@ -7,6 +7,7 @@ import { CreateIssue, CommandPalette, ShortcutSheet } from './components/Overlay
 import { IssuePage } from './views/IssuePage';
 import { TeamIssues, MyIssues, ProjectsView, ProjectView, CyclesView, CycleView } from './views/Lists';
 import { Settings } from './views/Settings';
+import { ViewPage } from './views/Views';
 import { issuePickers } from './pickers';
 import { assignToMe, confirmDelete, copyBranch, copyId, copyLink } from './actions';
 import { Avatar } from './components/bits';
@@ -59,6 +60,7 @@ function View({ route }: { route: Route }) {
     case 'cycles': return <CyclesView />;
     case 'cycle': return <CycleView number={route.number} key={route.number} />;
     case 'settings': return <Settings section={route.section} />;
+    case 'view': return <ViewPage id={route.id} key={route.id} />;
     default: return <TeamIssues tab={route.tab} />;
   }
 }
@@ -102,7 +104,7 @@ function Sidebar({ route }: { route: Route }) {
         <div className="nav-section">Your team</div>
         <div className="nav-team"><TeamIcon color={d.team.color} size={16} /><span>{d.team.name}</span></div>
         <div className="nav-indent">
-          {item('Issues', <Icon name="issues" />, '/issues', route.name === 'issues' || route.name === 'issue')}
+          {item('Issues', <Icon name="issues" />, '/issues', route.name === 'issues' || route.name === 'issue' || route.name === 'view')}
           {item('Cycles', <CycleIcon size={16} />, '/cycles', route.name === 'cycles' || route.name === 'cycle')}
           {item('Projects', <Icon name="projects" />, '/projects', route.name === 'projects')}
         </div>

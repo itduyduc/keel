@@ -88,6 +88,30 @@ code { font-family: var(--mono); }
 }
 .tab:hover { color: var(--text); }
 .tab.active { background: #1f1f22; border-color: #2e2e32; color: var(--text-strong); }
+.tab { display: inline-flex; align-items: center; gap: 6px; }
+.tabs .icon-btn { width: 24px; height: 24px; }
+
+/* ── saved views ────────────────────────────────────────────────────────── */
+.view-bar { display: flex; align-items: center; gap: 10px; padding: 8px 14px 8px 20px; border-bottom: 1px solid var(--border-subtle); font-size: 13px; min-height: 42px; }
+.view-bar-name { display: inline-flex; align-items: center; gap: 8px; color: var(--text-strong); font-weight: 500; white-space: nowrap; }
+.view-bar .muted { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.view-bar-tools { margin-left: auto; display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+.view-editor { margin: 10px 12px 6px; border: 1px solid #2a2a2e; border-radius: 10px; background: #18181a; }
+.view-editor-top { display: flex; align-items: flex-start; gap: 12px; padding: 14px 14px 10px; }
+.view-icon-btn { width: 36px; height: 36px; flex-shrink: 0; border-radius: 8px; border: 1px solid #2e2e32; background: #202023; display: flex; align-items: center; justify-content: center; padding: 0; }
+.view-icon-btn:hover { background: #26262a; }
+.view-editor-fields { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.view-name { border: 0; outline: none; background: none; font-size: 17px; font-weight: 600; color: var(--text-strong); padding: 6px 0 0; }
+.view-description { border: 0; outline: none; background: none; font-size: 13px; color: var(--text-2); padding: 2px 0; }
+.view-name::placeholder, .view-description::placeholder { color: var(--text-3); }
+.view-editor-actions { display: flex; gap: 8px; flex-shrink: 0; }
+.view-editor-filters { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; padding: 8px 14px 12px; border-top: 1px solid #242428; }
+.view-editor-filters .filter-bar { padding: 0; border: 0; }
+.views-menu-head { display: flex; align-items: center; justify-content: space-between; padding: 10px 10px 8px 14px; border-bottom: 1px solid #2a2a2e; color: var(--text); font-weight: 500; }
+.views-menu .menu-item .icon-btn { opacity: 0; }
+.views-menu .menu-item:hover .icon-btn { opacity: 1; }
+.views-menu .menu-item:hover { background: #29292d; }
+.icon-grid + .color-grid { border-top: 1px solid #2a2a2e; }
 .empty { padding: 48px 24px; text-align: center; color: var(--text-3); }
 
 /* ── sidebar ────────────────────────────────────────────────────────────── */

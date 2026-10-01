@@ -160,6 +160,22 @@ const MIGRATIONS = [
     PRIMARY KEY (issue_id, pr_id)
   );
   `,
+  // 2: saved views — a named filter over the team's issues, shared by everyone
+  `
+  CREATE TABLE views (
+    id INTEGER PRIMARY KEY,
+    name TEXT NOT NULL,
+    description TEXT,
+    icon TEXT NOT NULL DEFAULT 'layers',
+    color TEXT NOT NULL DEFAULT '#9b9b9e',
+    filters TEXT NOT NULL DEFAULT '{}',
+    creator_id INTEGER REFERENCES users(id),
+    sort_order REAL NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    deleted_at TEXT
+  );
+  `,
 ];
 
 // The PiCubed workspace as it was set up in Linear (read 2026-09-29). Issues start fresh.

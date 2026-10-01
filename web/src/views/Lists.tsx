@@ -9,26 +9,8 @@ import { cycleProgress } from '../pickers';
 import { cycleSpan, isClosed } from '../util';
 import { openMenu, anchorOf } from '../components/Menu';
 import type { Issue, IssuePatch } from '../types';
-
-function ViewHeader({ title, icon, tabs, right }: {
-  title: React.ReactNode; icon?: React.ReactNode;
-  tabs?: { key: string; label: string; href: string; active: boolean }[]; right?: React.ReactNode;
-}) {
-  return (
-    <header className="topbar">
-      <div className="crumbs">
-        {icon}
-        <span className="view-title">{title}</span>
-        {tabs && (
-          <div className="tabs">
-            {tabs.map((t) => <button key={t.key} className={`tab${t.active ? ' active' : ''}`} onClick={() => navigate(t.href)}>{t.label}</button>)}
-          </div>
-        )}
-      </div>
-      <div className="topbar-right">{right}</div>
-    </header>
-  );
-}
+import { ViewHeader, teamTabs } from './Header';
+import { ViewsMenuButton } from './Views';
 
 function FilteredList({ viewKey, issues, createDefaults, emptyText, header }: {
   viewKey: string; issues: Issue[]; createDefaults?: IssuePatch; emptyText?: string;
@@ -40,6 +22,7 @@ function FilteredList({ viewKey, issues, createDefaults, emptyText, header }: {
     setUi({ viewDefaults: createDefaults || {}, lastList: location.pathname + location.search });
     return () => setUi({ viewDefaults: {} });
   }, [viewKey]);
+  useEffect(() => { setUi({ currentFilters: filters }); }, [filters]);
   return (
     <>
       {header(
@@ -75,11 +58,8 @@ export function TeamIssues({ tab }: { tab: 'all' | 'active' | 'backlog' }) {
         <ViewHeader
           icon={<TeamIcon color={d.team.color} size={16} />}
           title="Issues"
-          tabs={[
-            { key: 'all', label: 'All issues', href: '/issues', active: tab === 'all' },
-            { key: 'active', label: 'Active', href: '/issues?tab=active', active: tab === 'active' },
-            { key: 'backlog', label: 'Backlog', href: '/issues?tab=backlog', active: tab === 'backlog' },
-          ]}
+          tabs={teamTabs(d, tab)}
+          extra={<ViewsMenuButton views={d.views} active={tab} />}
           right={right}
         />
       )}

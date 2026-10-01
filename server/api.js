@@ -39,6 +39,11 @@ export function createApi(store, { github, version }) {
   add('POST', '/api/projects', ({ actor, body }) => store.createProject(actor, body));
   add('PATCH', '/api/projects/:id', ({ actor, params, body }) => store.updateProject(actor, params.id, body));
 
+  add('GET', '/api/views', () => ({ views: store.listViews() }));
+  add('POST', '/api/views', ({ actor, body }) => store.createView(actor, body));
+  add('PATCH', '/api/views/:id', ({ actor, params, body }) => store.updateView(actor, params.id, body));
+  add('DELETE', '/api/views/:id', ({ actor, params }) => store.deleteView(actor, params.id));
+
   add('GET', '/api/members', () => ({ users: store.listUsers() }));
   add('POST', '/api/members', ({ actor, body }) => store.inviteUser(actor, body));
   add('PATCH', '/api/members/:id', ({ actor, params, body }) => {

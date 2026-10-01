@@ -3,7 +3,7 @@
 // and sort locally, so switching views and searching never wait on the network.
 import { useSyncExternalStore } from 'react';
 import { get, post, patch as patchReq, del, setSignedOutHandler, ApiError } from './api';
-import type { Activity, Bootstrap, Comment, Issue, IssuePatch, Label, Project, Team, User } from './types';
+import type { Activity, Bootstrap, Comment, FilterSet, Issue, IssuePatch, Label, Project, Team, User, View } from './types';
 import { toast } from './toast';
 
 export interface Detail { comments: Comment[]; activity: Activity[]; loaded: boolean }
@@ -101,6 +101,7 @@ function apply(e: any) {
     case 'activity': updateDetail(e.issueId, (d) => (d.activity.some((a) => a.id === e.activity.id) ? d : { ...d, activity: [...d.activity, e.activity] })); break;
     case 'labels': setData((d) => ({ ...d, labels: e.labels as Label[] })); break;
     case 'projects': setData((d) => ({ ...d, projects: e.projects as Project[] })); break;
+    case 'views': setData((d) => ({ ...d, views: e.views as View[] })); break;
     case 'users': setData((d) => ({ ...d, users: e.users as User[], me: (e.users as User[]).find((u) => u.id === d.me.id) || d.me })); break;
     case 'team': setData((d) => ({ ...d, team: e.team as Team })); break;
   }
@@ -189,6 +190,23 @@ export async function saveProject(input: { id?: number; name?: string; icon?: st
     if (input.id) return await patchReq<Project>(`/api/projects/${input.id}`, input);
     return await post<Project>('/api/projects', input);
   } catch (e) { fail(e); return null; }
+}
+
+export async function saveView(input: { id?: number; name?: string; description?: string | null; icon?: string; color?: string; filters?: FilterSet }) {
+  try {
+    const v = input.id ? await patchReq<View>(`/api/views/${input.id}`, input) : await post<View>('/api/views', input);
+    // in place before the live update lands, so a new view opens without a blank moment
+    setData((d) => ({ ...d, views: d.views.some((x) => x.id === v.id) ? d.views.map((x) => (x.id === v.id ? v : x)) : [...d.views, v] }));
+    return v;
+  } catch (e) { fail(e); return null; }
+}
+
+export async function removeView(id: number) {
+  try {
+    await del(`/api/views/${id}`);
+    setData((d) => ({ ...d, views: d.views.filter((x) => x.id !== id) }));
+    return true;
+  } catch (e) { fail(e); return false; }
 }
 
 export async function signOut() {

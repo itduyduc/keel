@@ -20,11 +20,14 @@ GitHub org webhook ─────────────────▶  /gith
 - **Online-only v1** with live updates. Offline, the Inbox + macOS notifications, and
   images/files are the **next pass**, in that order of size.
 - **Claude**: an MCP from day one; Claude acts as the token's owner.
+- **Saved views** (2026-09-30; Duy asked for Linear's, limited to the filters Plumb already has): a
+  named filter over the team's issues, shared by everyone, shown as tabs after All issues / Active /
+  Backlog (four inline, the rest under "N more"). Only the list's six filters; no display options.
 - Out: board view, issue relations, email, multiple teams, roadmaps, triage, light theme.
 
 ## Run, test, deploy
 
-- `npm test` — server tests on a throwaway database (17 cases, ~3 s). Run on Node 22 too:
+- `npm test` — server tests on a throwaway database (19 cases, ~3 s). Run on Node 22 too:
   the VM has `v22.23.2`, this Mac `v26`.
 - Local: `.env` (copy `.env.example`), `node server/index.js`, `npm run build` for the UI,
   `node scripts/seed-demo.mjs` for the screenshot issues. `PLUMB_DEV_LOGIN=1` signs in without

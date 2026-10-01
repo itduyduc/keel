@@ -9,6 +9,7 @@ import { StatusIcon, PriorityIcon, ProjectIcon, CycleIcon, TeamIcon, Icon } from
 import { pickStatus, pickPriority, pickAssignee, pickLabels, pickProject, pickCycle, pickEstimate, pickDueDate, pickParent, issuePickers } from '../pickers';
 import { PRIORITY_NAMES, dayLabel, estimateLabel } from '../util';
 import { copyBranch, copyId, copyLink, assignToMe, confirmDelete } from '../actions';
+import { newView } from '../views/Views';
 import { toast } from '../toast';
 import type { IssuePatch } from '../types';
 
@@ -126,6 +127,8 @@ function Palette() {
       go('Go to Settings', '/settings', 'settings', 'G S'),
       go('Create an API token for Claude', '/settings/tokens', 'key'),
       { key: 'shortcuts', label: 'Keyboard shortcuts', icon: <Icon name="command" />, hint: '?', section: 'Commands', run: () => setUi({ shortcuts: true }) },
+      { key: 'new-view', label: 'Create view…', icon: <Icon name="filter" />, section: 'Commands', run: () => newView() },
+      ...d.views.map((v): Cmd => ({ key: `view-${v.id}`, label: `Go to view: ${v.name}`, icon: <ProjectIcon icon={v.icon} color={v.color} />, section: 'Navigate', run: () => navigate(`/view/${v.id}`) })),
     ];
     if (ctx) {
       const at = null;
@@ -153,7 +156,9 @@ function Palette() {
 
   const results = useMemo(() => {
     const s = q.trim().toLowerCase();
-    const cmds = s ? commands.filter((c) => c.label.toLowerCase().includes(s)) : commands;
+    // every word, in any order: "view bugs" finds "Go to view: Bugs"
+    const words = s.split(/\s+/);
+    const cmds = s ? commands.filter((c) => words.every((w) => c.label.toLowerCase().includes(w))) : commands;
     if (!s) return cmds;
     const n = s.replace(/^[a-z]+-/, '');
     const issues = d.issues

@@ -46,8 +46,16 @@ export interface Activity {
   kind: string; from: string | null; to: string | null; meta: { title?: string; url?: string; repo?: string; number?: number } | null; createdAt: string;
 }
 
+export type FilterKey = 'status' | 'assignee' | 'priority' | 'label' | 'project' | 'cycle';
+export type FilterSet = Partial<Record<FilterKey, (number | 'none')[]>>;
+
+export interface View {
+  id: number; name: string; description: string | null; icon: string; color: string;
+  filters: FilterSet; creatorId: number | null; sortOrder: number; createdAt: string; updatedAt: string;
+}
+
 export interface Bootstrap {
-  version: string; me: User; team: Team; statuses: Status[]; users: User[]; labels: Label[]; projects: Project[];
+  version: string; me: User; team: Team; statuses: Status[]; users: User[]; labels: Label[]; projects: Project[]; views: View[];
   cycles: { current: number; cycles: Cycle[] }; issues: Issue[];
 }
 

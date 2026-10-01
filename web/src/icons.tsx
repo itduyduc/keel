@@ -144,6 +144,7 @@ const PROJECT_PATHS: Record<string, ReactNode> = {
   users: <><circle cx="6" cy="5.5" r="2.5" /><path d="M1.8 13.5c0-2.3 1.9-4 4.2-4s4.2 1.7 4.2 4M10.5 3.2a2.5 2.5 0 0 1 0 4.8M12.2 9.8c1.2.6 2 1.9 2 3.7" /></>,
   shop: <><path d="M2.5 6.5V13.5h11V6.5" /><path d="M1.8 6.2L3.2 2.5h9.6l1.4 3.7c0 1-.9 1.8-2 1.8s-2-.8-2-1.8c0 1-.9 1.8-2 1.8s-2-.8-2-1.8c0 1-.9 1.8-2 1.8s-2.4-.8-2.4-1.8z" /><path d="M6.5 13.5v-3h3v3" /></>,
   mountain: <path d="M1.5 13.5l4.8-8 2.7 4.4 1.6-2.4 3.9 6z" />,
+  layers: <><path d="M8 2.2l6 3.2-6 3.2-6-3.2z" /><path d="M2 8.4l6 3.2 6-3.2" /><path d="M2 11.2l6 3.2 6-3.2" /></>,
   sparkles: <path d="M6 2.5l1.1 3.4 3.4 1.1-3.4 1.1L6 11.5 4.9 8.1 1.5 7l3.4-1.1zM12 9.5l.6 1.9 1.9.6-1.9.6-.6 1.9-.6-1.9-1.9-.6 1.9-.6z" />,
 };
 export function ProjectIcon({ icon, color = '#9b9b9e', size = 16 }: { icon: string; color?: string; size?: number }) {

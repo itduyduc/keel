@@ -65,6 +65,29 @@ test('autosaving a description logs one activity line per sitting, not one per p
   assert.equal(after.activity.filter((a) => a.kind === 'description').length, 2);
 });
 
+test('saved views: anyone saves a filter under a name, and everyone sees it', async () => {
+  const me = (await harshit.get('/api/me')).body;
+  const created = await harshit.post('/api/views', {
+    name: "Harshit's issues", description: 'Issues assigned to Harshit', icon: 'bug', color: '#eb5757',
+    filters: { assignee: [me.id], status: [status('Todo'), status('In Progress')], label: [] },
+  });
+  assert.equal(created.status, 200, JSON.stringify(created.body));
+  assert.deepEqual(created.body.filters, { assignee: [me.id], status: [status('Todo'), status('In Progress')] }, 'empty filters are dropped');
+  assert.ok((await duy.get('/api/bootstrap')).body.views.some((v) => v.id === created.body.id), 'shared with the team');
+
+  const renamed = await duy.patch(`/api/views/${created.body.id}`, { name: 'Harshit · open', filters: { assignee: [me.id], priority: [1, 'none'] } });
+  assert.equal(renamed.body.name, 'Harshit · open');
+  assert.deepEqual(renamed.body.filters, { assignee: [me.id], priority: [1, 'none'] });
+
+  assert.equal((await duy.post('/api/views', { name: ' ' })).status, 400);
+  assert.equal((await duy.post('/api/views', { name: 'x', filters: { mood: [1] } })).status, 400, 'only the six filters exist');
+  assert.equal((await duy.post('/api/views', { name: 'x', filters: { assignee: ['bob'] } })).status, 400);
+
+  await duy.del(`/api/views/${created.body.id}`);
+  assert.ok(!(await duy.get('/api/views')).body.views.some((v) => v.id === created.body.id));
+  assert.equal((await duy.del(`/api/views/${created.body.id}`)).status, 404);
+});
+
 test('bad input is refused with a reason', async () => {
   assert.equal((await duy.post('/api/issues', { title: '  ' })).status, 400);
   assert.equal((await duy.post('/api/issues', { title: 'x', priority: 9 })).status, 400);
