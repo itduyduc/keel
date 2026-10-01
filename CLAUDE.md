@@ -30,6 +30,10 @@ GitHub org webhook ─────────────────▶  /gith
   `node scripts/seed-demo.mjs` for the screenshot issues. `PLUMB_DEV_LOGIN=1` signs in without
   Google and only answers on localhost.
 - `bash mac/build-app.sh [dest]` — the shell. Rebuild only when `mac/` changes.
+- **Live at `https://plumb.itsduy.com` since 2026-09-30.** DNS `A plumb → 8.235.111.45` was added
+  through the Hostinger MCP (`hostinger` in `~/.claude.json`; this desktop session did not load it,
+  so it was driven over stdio). Google client "Plumb" lives in project `duy-personal`, published,
+  with `/privacy.html` as its privacy page; its ID and secret are only in `/etc/plumb.env` on the VM.
 - Hosting: co-hosted on the free GCP VM `duymydo` (see Duy My Do's CLAUDE.md), code in
   `/opt/plumb`, data in `/var/lib/plumb`, Caddy site `plumb.itsduy.com`.
   First time `bash scripts/setup-vm.sh`, then `bash scripts/deploy.sh`. Backups: `bash scripts/backup.sh`.
