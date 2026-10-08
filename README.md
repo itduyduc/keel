@@ -9,6 +9,13 @@ Claude (MCP token) ──┤  /mcp
 GitHub org webhook ──┘  /github/webhook
 ```
 
+## Your own server, your own data
+
+There is no hosted version and no shared server.
+You run your own copy, on your own machine or VM, under your own domain and your own Google OAuth client.
+Nothing ships with it: the database is created empty on the first start, and nothing here connects to, imports from or syncs with anyone else's instance.
+`data/` and `*.db` are gitignored, so a fork never carries a database either.
+
 ## What it has
 
 - Issues with status, priority, assignee, labels, project, estimate, parent, weekly cycles.
