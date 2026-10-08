@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Pulls a consistent snapshot of plumb.db from the VM into BACKUP_DIR, newest 7 kept.
+# Pulls a consistent snapshot of keel.db from the VM into BACKUP_DIR, newest 7 kept.
 #
 #   bash scripts/backup.sh
 #
@@ -9,13 +9,13 @@
 set -euo pipefail
 # shellcheck disable=SC1091
 source "$(dirname "$0")/_env.sh"
-DEST="${BACKUP_DIR:-$HOME/Backups/duy-my-linear}"
+DEST="${BACKUP_DIR:-$HOME/Backups/keel}"
 
 stamp="$(date +%Y-%m-%d-%H%M)"
-snap="/tmp/plumb-$stamp.db"
-"${G[@]}" ssh "$VM" --zone="$ZONE" --quiet --command "sudo sqlite3 /var/lib/plumb/plumb.db \".backup '$snap'\" && sudo chmod 644 '$snap'"
+snap="/tmp/keel-$stamp.db"
+"${G[@]}" ssh "$VM" --zone="$ZONE" --quiet --command "sudo sqlite3 /var/lib/keel/keel.db \".backup '$snap'\" && sudo chmod 644 '$snap'"
 mkdir -p "$DEST"
-"${G[@]}" scp --zone="$ZONE" --quiet "$VM:$snap" "$DEST/plumb-$stamp.db"
+"${G[@]}" scp --zone="$ZONE" --quiet "$VM:$snap" "$DEST/keel-$stamp.db"
 "${G[@]}" ssh "$VM" --zone="$ZONE" --quiet --command "sudo rm -f '$snap'"
-ls -1t "$DEST"/plumb-*.db | tail -n +8 | while read -r old; do rm -f "$old"; done
-echo "✅ $DEST/plumb-$stamp.db ($(du -h "$DEST/plumb-$stamp.db" | cut -f1))"
+ls -1t "$DEST"/keel-*.db | tail -n +8 | while read -r old; do rm -f "$old"; done
+echo "✅ $DEST/keel-$stamp.db ($(du -h "$DEST/keel-$stamp.db" | cut -f1))"

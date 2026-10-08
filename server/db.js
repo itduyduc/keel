@@ -1,4 +1,4 @@
-// SQLite through node:sqlite (no dependencies). One file: <dataDir>/plumb.db.
+// SQLite through node:sqlite (no dependencies). One file: <dataDir>/keel.db.
 import fs from 'node:fs';
 import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
@@ -162,9 +162,9 @@ const MIGRATIONS = [
   `,
 ];
 
-// What a fresh database starts with. The team comes from config (PLUMB_TEAM_*), read on the
-// first start only; a team that moved here from Linear sets PLUMB_FIRST_ISSUE_NUMBER so no
-// number ever means two things, and PLUMB_CYCLE_ANCHOR so cycle numbers keep counting.
+// What a fresh database starts with. The team comes from config (KEEL_TEAM_*), read on the
+// first start only; a team that moved here from Linear sets KEEL_FIRST_ISSUE_NUMBER so no
+// number ever means two things, and KEEL_CYCLE_ANCHOR so cycle numbers keep counting.
 const SEED = {
   meta: (team) => ({
     team_key: team.key,
@@ -207,7 +207,7 @@ function lastMonday(tz) {
 
 export function openDb(dataDir, team) {
   fs.mkdirSync(dataDir, { recursive: true });
-  const db = new DatabaseSync(path.join(dataDir, 'plumb.db'));
+  const db = new DatabaseSync(path.join(dataDir, 'keel.db'));
   db.exec('PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON; PRAGMA busy_timeout = 5000;');
   migrate(db, team);
   return db;

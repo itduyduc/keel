@@ -88,7 +88,7 @@ export function avatarColor(seed: string) {
 
 // ── clipboard: the Mac shell's pasteboard first, then the browser's ──────────
 export async function copy(text: string, what?: string) {
-  const native = (window as any).webkit?.messageHandlers?.plumb;
+  const native = (window as any).webkit?.messageHandlers?.keel;
   try {
     if (native) native.postMessage({ action: 'copy', text });
     else await navigator.clipboard.writeText(text);

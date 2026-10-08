@@ -1,0 +1,24 @@
+# /etc/systemd/system/keel.service — installed by scripts/setup-vm.sh
+[Unit]
+Description=Keel (issue tracker)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=keel
+Group=keel
+WorkingDirectory=/opt/keel
+# code lives in /opt/keel, data in /var/lib/keel: a redeploy can never touch keel.db
+EnvironmentFile=/etc/keel.env
+Environment=NODE_ENV=production NODE_NO_WARNINGS=1 KEEL_SKIP_ENV_FILE=1 KEEL_DATA_DIR=/var/lib/keel KEEL_WEB_DIR=/opt/keel/web/dist
+ExecStart=/usr/bin/node /opt/keel/server/index.js
+Restart=always
+RestartSec=2
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/keel
+
+[Install]
+WantedBy=multi-user.target

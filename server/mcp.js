@@ -1,7 +1,7 @@
 // MCP over Streamable HTTP, tools only, stateless: POST /mcp with a personal token.
 // Claude acts as the token's owner, so an issue or comment it writes is authored by them.
 //
-//   claude mcp add --transport http duy-my-linear https://<host>/mcp --header "Authorization: Bearer plumb_…"
+//   claude mcp add --transport http keel https://<host>/mcp --header "Authorization: Bearer keel_…"
 //
 // Tool names and argument shapes follow the Linear MCP, so habits carry over.
 import { config } from './config.js';
@@ -277,7 +277,7 @@ export function createMcp(store, { version }) {
     },
   ];
 
-  const instructions = `Duy My Linear is the ${store.team().name} team's issue tracker, a minimal Linear. Issues are ${key}-<number>. `
+  const instructions = `Keel is the ${store.team().name} team's issue tracker, a minimal Linear. Issues are ${key}-<number>. `
     + 'Descriptions and comments are markdown. Mention teammates as @handle (list_users). '
     + 'A pull request whose branch or title contains the issue id links itself; use get_issue for the branch name.';
 
@@ -295,7 +295,7 @@ export function createMcp(store, { version }) {
         return ok({
           protocolVersion: PROTOCOL_VERSIONS.includes(asked) ? asked : PROTOCOL_VERSIONS[0],
           capabilities: { tools: { listChanged: false } },
-          serverInfo: { name: 'plumb', title: 'Duy My Linear', version },
+          serverInfo: { name: 'keel', title: 'Keel', version },
           instructions,
         });
       }
@@ -325,7 +325,7 @@ export function createMcp(store, { version }) {
     if (origin && new URL(origin).host !== new URL(config.publicUrl).host) throw new HttpError(403, 'Origin not allowed');
     const auth = authenticate(store, req);
     if (!auth || auth.via !== 'token') {
-      return sendJson(res, 401, { error: 'Pass a Duy My Linear token: Authorization: Bearer plumb_… (Settings → API tokens)' }, { 'www-authenticate': 'Bearer' });
+      return sendJson(res, 401, { error: 'Pass a Keel token: Authorization: Bearer keel_… (Settings → API tokens)' }, { 'www-authenticate': 'Bearer' });
     }
     const raw = await readBody(req);
     let body;

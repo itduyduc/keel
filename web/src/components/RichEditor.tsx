@@ -22,14 +22,14 @@ import type { User } from '../types';
 // ── @mentions: a picker that inserts plain "@handle " text ─────────────────
 // Plain text, not a special node, so the markdown round-trips untouched.
 const Mentions = Extension.create({
-  name: 'plumbMentions',
+  name: 'keelMentions',
   priority: 200, // before our own keys, so Esc/Enter reach the picker first
   addProseMirrorPlugins() {
     return [
       Suggestion<User>({
         editor: this.editor,
         char: '@',
-        pluginKey: new PluginKey('plumbMentionPicker'),
+        pluginKey: new PluginKey('keelMentionPicker'),
         items: ({ query }) => {
           const q = query.toLowerCase();
           return (getState().data?.users || [])
@@ -124,14 +124,14 @@ function tokenDecorations(doc: PMNode) {
 }
 
 const Tokens = Extension.create({
-  name: 'plumbTokens',
+  name: 'keelTokens',
   addProseMirrorPlugins() {
     return [
       new Plugin({
-        key: new PluginKey('plumbTokens'),
+        key: new PluginKey('keelTokens'),
         state: {
           init: (_, { doc }) => tokenDecorations(doc),
-          apply: (tr, old) => (tr.docChanged || tr.getMeta('plumbTokens') ? tokenDecorations(tr.doc) : old),
+          apply: (tr, old) => (tr.docChanged || tr.getMeta('keelTokens') ? tokenDecorations(tr.doc) : old),
         },
         props: {
           decorations(state) { return this.getState(state); },
@@ -163,7 +163,7 @@ function buildExtensions(placeholder: string, cbs: Callbacks) {
     Mentions,
     Tokens,
     Extension.create({
-      name: 'plumbKeys',
+      name: 'keelKeys',
       addKeyboardShortcuts: () => ({
         'Mod-Enter': () => { if (!cbs.current.onSubmit) return false; cbs.current.onSubmit(); return true; },
         Escape: ({ editor: e }) => {
@@ -289,7 +289,7 @@ export const RichEditor = forwardRef<RichEditorHandle, Props>(function RichEdito
   const { data } = useApp();
   const users = data?.users || [], issues = data?.issues || [];
   useEffect(() => {
-    if (editor) editor.view.dispatch(editor.state.tr.setMeta('plumbTokens', true));
+    if (editor) editor.view.dispatch(editor.state.tr.setMeta('keelTokens', true));
   }, [editor, users.length, issues.length]);
 
   // TipTap's focus('end') reports success without moving focus away from another field; the view's own focus does
@@ -310,11 +310,11 @@ export const RichEditor = forwardRef<RichEditorHandle, Props>(function RichEdito
 });
 
 // what the editor would save for this markdown, untouched by a person:
-// plumbDebug.roundTrip(md) in the console, and the tests' way of checking fidelity
+// keelDebug.roundTrip(md) in the console, and the tests' way of checking fidelity
 export function roundTrip(md: string) {
   const e = new TiptapEditor({ extensions: buildExtensions('', { current: {} }), content: md, contentType: 'markdown' });
   const out = tidyMarkdown(e.getMarkdown());
   e.destroy();
   return out;
 }
-(window as any).plumbDebug = { roundTrip };
+(window as any).keelDebug = { roundTrip };

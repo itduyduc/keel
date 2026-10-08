@@ -73,8 +73,8 @@ export function createApi(store, { github, version }) {
 
     // A cookie rides along on cross-site requests; a custom header cannot be added by
     // another site without CORS saying yes, which this server never does.
-    if (auth.via === 'session' && req.method !== 'GET' && req.headers['x-requested-with'] !== 'plumb') {
-      throw new HttpError(403, 'Missing X-Requested-With: plumb');
+    if (auth.via === 'session' && req.method !== 'GET' && req.headers['x-requested-with'] !== 'keel') {
+      throw new HttpError(403, 'Missing X-Requested-With: keel');
     }
 
     for (const r of routes) {

@@ -1,5 +1,5 @@
 // Weekly cycles, numbered from a fixed anchor Monday in the team's time zone.
-// Nothing is stored: cycle N is always the same week, so Duy My Linear's numbers line
+// Nothing is stored: cycle N is always the same week, so Keel's numbers line
 // up with the weeks Linear already used (Cycle 1 began Monday 2026-08-31).
 
 const DAY = 86_400_000;

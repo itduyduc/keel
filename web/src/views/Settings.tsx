@@ -132,7 +132,7 @@ function Tokens() {
     const r = await del<{ tokens: Token[] }>(`/api/tokens/${t.id}`);
     setTokens(r.tokens);
   };
-  const cmd = (token: string) => `claude mcp add --scope user --transport http duy-my-linear ${location.origin}/mcp --header "Authorization: Bearer ${token}"`;
+  const cmd = (token: string) => `claude mcp add --scope user --transport http keel ${location.origin}/mcp --header "Authorization: Bearer ${token}"`;
   return (
     <div className="settings-section">
       <h2>API & Claude</h2>
@@ -145,7 +145,7 @@ function Tokens() {
         <div className="callout">
           <div><strong>Copy this now.</strong> It is shown once.</div>
           <code className="token">{fresh}</code>
-          <div className="muted small">Add Duy My Linear to Claude Code, for every project on this Mac:</div>
+          <div className="muted small">Add Keel to Claude Code, for every project on this Mac:</div>
           <code className="token">{cmd(fresh)}</code>
           <div className="row-gap"><button className="btn primary small" onClick={() => copy(cmd(fresh), 'the Claude command')}>Copy command</button><button className="btn ghost small" onClick={() => copy(fresh, 'token')}>Copy token</button></div>
         </div>

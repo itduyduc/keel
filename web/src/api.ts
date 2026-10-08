@@ -18,14 +18,14 @@ export async function api<T>(method: string, path: string, body?: unknown): Prom
       method,
       credentials: 'same-origin',
       headers: {
-        'x-requested-with': 'plumb',
+        'x-requested-with': 'keel',
         ...(body !== undefined ? { 'content-type': 'application/json' } : {}),
       },
       body: body !== undefined ? JSON.stringify(body) : undefined,
     });
   } catch {
     // WebKit says only "Load failed": the request never reached the server
-    throw new ApiError(0, method === 'GET' ? "Can't reach Duy My Linear" : "Can't reach Duy My Linear — not saved");
+    throw new ApiError(0, method === 'GET' ? "Can't reach Keel" : "Can't reach Keel — not saved");
   }
   if (r.status === 401) {
     onSignedOut();
@@ -50,7 +50,7 @@ export function reportClientError(message: string) {
   fetch('/api/client-log', {
     method: 'POST',
     credentials: 'same-origin',
-    headers: { 'content-type': 'application/json', 'x-requested-with': 'plumb' },
+    headers: { 'content-type': 'application/json', 'x-requested-with': 'keel' },
     body: JSON.stringify({ level: 'error', message }),
   }).catch(() => {});
 }

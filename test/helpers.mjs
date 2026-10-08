@@ -10,18 +10,18 @@ export const TEAM = { name: 'Acme', key: 'PIC', firstIssueNumber: 79, cycleAncho
 export const WEBHOOK_SECRET = 'test-webhook-secret';
 
 export async function boot({ web = false } = {}) {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'plumb-test-'));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'keel-test-'));
   Object.assign(process.env, {
-    PLUMB_SKIP_ENV_FILE: '1',
-    PLUMB_DEV_LOGIN: '1',
-    PLUMB_ADMIN_EMAILS: ADMIN,
-    PLUMB_GITHUB_WEBHOOK_SECRET: WEBHOOK_SECRET,
-    PLUMB_GITHUB_TOKEN: '',
+    KEEL_SKIP_ENV_FILE: '1',
+    KEEL_DEV_LOGIN: '1',
+    KEEL_ADMIN_EMAILS: ADMIN,
+    KEEL_GITHUB_WEBHOOK_SECRET: WEBHOOK_SECRET,
+    KEEL_GITHUB_TOKEN: '',
   });
   let webDir = path.join(dir, 'web');
   if (web) {
     fs.mkdirSync(path.join(webDir, 'assets'), { recursive: true });
-    fs.writeFileSync(path.join(webDir, 'index.html'), '<!doctype html><title>Duy My Linear</title><div id="root"></div>');
+    fs.writeFileSync(path.join(webDir, 'index.html'), '<!doctype html><title>Keel</title><div id="root"></div>');
     fs.writeFileSync(path.join(webDir, 'assets', 'app-abc123.js'), 'console.log(1)');
   }
   const { createServer } = await import('../server/index.js');
@@ -42,7 +42,7 @@ export async function signIn(base, email) {
   const r = await fetch(`${base}/auth/dev/as?email=${encodeURIComponent(email)}`, { redirect: 'manual' });
   const cookie = (r.headers.get('set-cookie') || '').split(';')[0];
   if (r.status !== 302 || !cookie) throw new Error(`sign-in failed for ${email}: ${r.status}`);
-  return client(base, { cookie, 'x-requested-with': 'plumb' });
+  return client(base, { cookie, 'x-requested-with': 'keel' });
 }
 
 export function client(base, headers) {

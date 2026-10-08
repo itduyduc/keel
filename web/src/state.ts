@@ -192,7 +192,7 @@ export async function saveProject(input: { id?: number; name?: string; icon?: st
 }
 
 export async function signOut() {
-  await fetch('/auth/logout', { method: 'POST', credentials: 'same-origin', headers: { 'x-requested-with': 'plumb' } });
+  await fetch('/auth/logout', { method: 'POST', credentials: 'same-origin', headers: { 'x-requested-with': 'keel' } });
   source?.close();
   source = null;
   set({ phase: 'signed-out', data: null, detail: {} });

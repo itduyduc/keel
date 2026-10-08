@@ -112,7 +112,7 @@ export function createGithub(store, cfg) {
         authorization: `Bearer ${cfg.token}`,
         accept: 'application/vnd.github+json',
         'x-github-api-version': '2022-11-28',
-        'user-agent': 'plumb',
+        'user-agent': 'keel',
       },
     });
     if (!r.ok) throw new Error(`GitHub ${r.status} on ${path}: ${(await r.text()).slice(0, 200)}`);

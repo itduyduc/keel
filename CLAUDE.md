@@ -1,13 +1,13 @@
-# Duy My Linear
+# Keel
 
 A minimal, self-hosted Linear for a small team. One Node server, no dependencies on the server side, SQLite through `node:sqlite`, a Vite + React web UI, a Swift shell for the Mac. README has the user's view; this file is the contributor's.
 
 ```
-mac/DuyMyLinear/main.swift   the Mac shell: WKWebView + ASWebAuthenticationSession
+mac/Keel/main.swift   the Mac shell: WKWebView + ASWebAuthenticationSession
 web/src                      the UI (React, TipTap); built into web/dist
 server/index.js              http server: /auth, /api, /mcp, /github/webhook, static
 server/store.js              EVERY write: validation, activity trail, live updates
-server/db.js                 schema, migrations, first-run seed from PLUMB_TEAM_*
+server/db.js                 schema, migrations, first-run seed from KEEL_TEAM_*
 server/auth.js               Google OAuth, dev login, the Mac app's code exchange
 server/github.js             PR webhook + catch-up poll → issue status
 server/mcp.js                MCP over streamable HTTP, bearer tokens
@@ -19,7 +19,7 @@ scripts/ deploy/             gcloud-driven VM setup, deploy, backup; systemd + C
 ## Run, test, build
 
 - `npm test` — server tests, ~3 s. Run on Node 22 as well as the latest: `node:sqlite` is where they differ.
-- Local: `.env` (copy `.env.example`), `node server/index.js`, `npm run build` for the UI. `PLUMB_DEV_LOGIN=1` signs in without Google and only answers on localhost.
+- Local: `.env` (copy `.env.example`), `node server/index.js`, `npm run build` for the UI. `KEEL_DEV_LOGIN=1` signs in without Google and only answers on localhost.
 - `bash mac/build-app.sh --server <url>` — the Mac shell. Rebuild only when `mac/` changes; the UI comes from the server.
 - `bash scripts/deploy.sh` needs `deploy/deploy.env` (see the example) and `gcloud`.
 
@@ -29,13 +29,13 @@ scripts/ deploy/             gcloud-driven VM setup, deploy, backup; systemd + C
 - **Google refuses OAuth inside a web view** (403 disallowed_useragent). The Mac shell signs in with ASWebAuthenticationSession and a one-time code (`/auth/exchange`); never "fix" sign-in by loading Google in the WKWebView.
 - **PR status automation only moves forward**: open (not draft) → In Review; all linked PRs merged or closed with ≥1 merged → Done; nothing leaves Done/Canceled/Duplicate.
 - **Cycles are computed, not stored**: weekly from the anchor Monday in the team's zone. Unfinished issues in an ended cycle roll into the current one every minute.
-- **The first-run seed is read once.** `PLUMB_TEAM_*` shape a new database; after that the database wins, and a change needs a migration or Settings.
+- **The first-run seed is read once.** `KEEL_TEAM_*` shape a new database; after that the database wins, and a change needs a migration or Settings.
 - **Migrations append to `MIGRATIONS` in `db.js`**, never edit an entry: `PRAGMA user_version` counts them.
 - **The Mac app is one instance.** A second launch raises the first and exits; one-shot `--flag` launches are exempt.
 
 ## Gotchas
 
-- **The editor is TipTap (ProseMirror, like Linear's) saving plain markdown** via `@tiptap/markdown`, an early release. Its raw output padded tables, turned `&` into `&amp;` in cells and `~10s` into `\~10s`; `tidyMarkdown()` in `RichEditor.tsx` puts that back. It only saves after a person types, so opening an issue never rewrites its description. Check fidelity with `plumbDebug.roundTrip(md)` in the page console.
+- **The editor is TipTap (ProseMirror, like Linear's) saving plain markdown** via `@tiptap/markdown`, an early release. Its raw output padded tables, turned `&` into `&amp;` in cells and `~10s` into `\~10s`; `tidyMarkdown()` in `RichEditor.tsx` puts that back. It only saves after a person types, so opening an issue never rewrites its description. Check fidelity with `keelDebug.roundTrip(md)` in the page console.
 - TipTap's `focus('end')` reports success without taking focus from another field; `focusEnd()` focuses the view itself.
 - Testing the editor through browser automation: a `type` action inserts text in one go, which skips markdown shortcuts (`**bold**` stays literal). Feed characters one at a time, the way a keyboard does, before calling a shortcut broken.
 - Headless Chrome never finishes loading a signed-in page: the live-update stream keeps it busy, so `--screenshot` / `--virtual-time-budget` hang. Drive it over the DevTools protocol and capture after a fixed wait.
@@ -44,4 +44,4 @@ scripts/ deploy/             gcloud-driven VM setup, deploy, backup; systemd + C
 
 ## Naming
 
-The product is Duy My Linear. The internal name is `plumb` (its first name): env vars `PLUMB_*`, tokens `plumb_…`, cookie `plumb_session`, URL scheme `plumb://`, `plumb.db`, `/opt/plumb`, `plumb.service`. Renaming those is a migration for every running instance, so they stay.
+Keel, everywhere: env vars `KEEL_*`, tokens `keel_…`, cookie `keel_session`, URL scheme `keel://`, `keel.db`, `/opt/keel`, `keel.service`. Tokens from before the rename start with `plumb_` and are still accepted.

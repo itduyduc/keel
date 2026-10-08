@@ -1,4 +1,4 @@
-// Duy My Linear's app icon: one white plumb bob on a dark macOS rounded square.
+// Keel's app icon: one white plumb bob on a dark macOS rounded square.
 // One idea only — the string and its weight, nothing else.
 //
 //   swift mac/icon.swift out.png        (mac/build-app.sh runs this)

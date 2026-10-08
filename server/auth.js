@@ -3,14 +3,14 @@
 // Browser:  /auth/google → Google → /auth/google/callback → session cookie → /
 // Mac app:  Google refuses OAuth inside an embedded web view (403 disallowed_useragent),
 //           so the shell runs the same flow in ASWebAuthenticationSession with
-//           ?client=mac. The callback then hands back plumb://auth?code=… (single use,
+//           ?client=mac. The callback then hands back keel://auth?code=… (single use,
 //           2 minutes), and the shell loads /auth/exchange?code=… in its web view,
 //           which sets the cookie there.
 import crypto from 'node:crypto';
 import { config, googleConfigured } from './config.js';
 import { randomToken, redirect, sendHtml, parseCookies, escapeHtml, log, HttpError, readBody } from './util.js';
 
-const COOKIE = 'plumb_session';
+const COOKIE = 'keel_session';
 const STATE_TTL = 10 * 60_000;
 const CODE_TTL = 2 * 60_000;
 const pendingStates = new Map(); // state → { client, verifier, at }
@@ -52,7 +52,7 @@ export function authenticate(store, req) {
 
 function page(title, body) {
   return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>${escapeHtml(title)} · Duy My Linear</title>
+<title>${escapeHtml(title)} · Keel</title>
 <style>
   :root { color-scheme: dark; }
   body { margin: 0; min-height: 100vh; display: grid; place-items: center; background: #0f0f10; color: #e6e6e6;
@@ -72,7 +72,7 @@ function complete(store, req, res, user, client) {
     const code = randomToken(24);
     exchangeCodes.set(code, { userId: user.id, at: Date.now() });
     log(`auth: ${user.email} signed in (mac, code issued)`);
-    return redirect(res, `plumb://auth?code=${encodeURIComponent(code)}`);
+    return redirect(res, `keel://auth?code=${encodeURIComponent(code)}`);
   }
   const token = store.createSession(user.id, req.headers['user-agent']);
   log(`auth: ${user.email} signed in (web)`);
@@ -81,7 +81,7 @@ function complete(store, req, res, user, client) {
 
 function notInvited(res, email) {
   return sendHtml(res, 403, page('Not invited', `<h1>${escapeHtml(email)} isn't on this team</h1>
-    <p>Duy My Linear only lets in email addresses an admin has invited. Ask one to add you, or try another Google account.</p>
+    <p>Keel only lets in email addresses an admin has invited. Ask one to add you, or try another Google account.</p>
     <a class="btn" href="/auth/google">Use another account</a>`));
 }
 
@@ -114,7 +114,7 @@ export async function handleAuth(store, req, res, url) {
   if (p === '/auth/google' && req.method === 'GET') {
     if (!googleConfigured()) {
       if (devLoginAllowed(req)) return redirect(res, `/auth/dev?client=${client}`);
-      return sendHtml(res, 503, page('Not set up', '<h1>Google sign-in isn\'t set up yet</h1><p>The server has no Google OAuth client. Set PLUMB_GOOGLE_CLIENT_ID and PLUMB_GOOGLE_CLIENT_SECRET.</p>'));
+      return sendHtml(res, 503, page('Not set up', '<h1>Google sign-in isn\'t set up yet</h1><p>The server has no Google OAuth client. Set KEEL_GOOGLE_CLIENT_ID and KEEL_GOOGLE_CLIENT_SECRET.</p>'));
     }
     const state = randomToken(16);
     const verifier = randomToken(32);
@@ -136,7 +136,7 @@ export async function handleAuth(store, req, res, url) {
     const st = pendingStates.get(url.searchParams.get('state') || '');
     pendingStates.delete(url.searchParams.get('state') || '');
     if (!st || Date.now() - st.at > STATE_TTL) {
-      return sendHtml(res, 400, page('Expired', '<h1>That sign-in expired</h1><p>Start again from Duy My Linear.</p><a class="btn" href="/auth/google">Sign in with Google</a>'));
+      return sendHtml(res, 400, page('Expired', '<h1>That sign-in expired</h1><p>Start again from Keel.</p><a class="btn" href="/auth/google">Sign in with Google</a>'));
     }
     if (url.searchParams.get('error')) {
       return sendHtml(res, 400, page('Canceled', `<h1>Sign-in didn't finish</h1><p>Google said: ${escapeHtml(url.searchParams.get('error'))}</p>`));
@@ -158,7 +158,7 @@ export async function handleAuth(store, req, res, url) {
     const entry = exchangeCodes.get(code);
     exchangeCodes.delete(code);
     if (!entry || Date.now() - entry.at > CODE_TTL) {
-      return sendHtml(res, 400, page('Expired', '<h1>That sign-in expired</h1><p>Sign in again.</p><a class="btn" href="/">Back to Duy My Linear</a>'));
+      return sendHtml(res, 400, page('Expired', '<h1>That sign-in expired</h1><p>Sign in again.</p><a class="btn" href="/">Back to Keel</a>'));
     }
     const token = store.createSession(entry.userId, req.headers['user-agent']);
     return redirect(res, '/', { 'set-cookie': sessionCookie(token) });
@@ -169,7 +169,7 @@ export async function handleAuth(store, req, res, url) {
     if (!devLoginAllowed(req)) throw new HttpError(404, 'Not found');
     const users = store.listUsers().filter((u) => u.active);
     const links = users.map((u) => `<a class="btn" href="/auth/dev/as?client=${client}&email=${encodeURIComponent(u.email)}">${escapeHtml(u.name)} <small>${escapeHtml(u.email)}</small></a>`).join('');
-    return sendHtml(res, 200, page('Dev sign-in', `<h1>Dev sign-in</h1><p>Google isn't configured; this page only answers on localhost with PLUMB_DEV_LOGIN=1.</p>${links || '<p>No members. Set PLUMB_ADMIN_EMAILS.</p>'}`));
+    return sendHtml(res, 200, page('Dev sign-in', `<h1>Dev sign-in</h1><p>Google isn't configured; this page only answers on localhost with KEEL_DEV_LOGIN=1.</p>${links || '<p>No members. Set KEEL_ADMIN_EMAILS.</p>'}`));
   }
   if (p === '/auth/dev/as' && req.method === 'GET') {
     if (!devLoginAllowed(req)) throw new HttpError(404, 'Not found');

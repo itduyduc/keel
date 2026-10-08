@@ -184,7 +184,7 @@ function Timeline({ issue, data, comments, activity }: { issue: Issue; data: Boo
 
 function actorOf(a: Activity, data: Bootstrap) {
   if (a.actorKind === 'github') return { name: 'GitHub', user: null };
-  if (a.actorKind === 'system') return { name: 'Duy My Linear', user: null };
+  if (a.actorKind === 'system') return { name: 'Keel', user: null };
   const u = data.users.find((x) => x.id === a.actorId);
   return { name: u?.name || a.actorName || 'Someone', user: u };
 }

@@ -21,12 +21,12 @@ export function IssueList({ issues, viewKey, createDefaults = {}, emptyText = 'N
   const ui = useUi();
   const d = data!;
   const [collapsed, setCollapsed] = useState<Record<number, boolean>>(() => {
-    const saved = store.get(`plumb.collapsed.${viewKey}`);
+    const saved = store.get(`keel.collapsed.${viewKey}`);
     if (saved) return saved;
     // finished work starts folded away, the way it sits at the bottom in Linear
     return Object.fromEntries(d.statuses.filter((s) => isClosed(s)).map((s) => [s.id, true]));
   });
-  const toggle = (id: number) => setCollapsed((c) => { const n = { ...c, [id]: !c[id] }; store.set(`plumb.collapsed.${viewKey}`, n); return n; });
+  const toggle = (id: number) => setCollapsed((c) => { const n = { ...c, [id]: !c[id] }; store.set(`keel.collapsed.${viewKey}`, n); return n; });
 
   const groups = useMemo(() => {
     const by = new Map<number, Issue[]>();

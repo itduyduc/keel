@@ -1,5 +1,5 @@
 #!/bin/bash
-# Builds Duy My Linear.app — a thin native window around the Duy My Linear web UI.
+# Builds Keel.app — a thin native window around the Keel web UI.
 #
 #   bash mac/build-app.sh --server https://your.tracker [dest-dir]
 #                                            default dest-dir: ~/Applications
@@ -7,11 +7,11 @@
 # --server (or SERVER_URL in the environment) is the address the app loads; it is
 # written into the bundle's Info.plist, so every kind of launch agrees on it.
 #
-# The UI is served by the Duy My Linear server, so a web deploy needs NO rebuild.
-# Rebuild only after editing mac/DuyMyLinear/main.swift or mac/icon.swift.
+# The UI is served by the Keel server, so a web deploy needs NO rebuild.
+# Rebuild only after editing mac/Keel/main.swift or mac/icon.swift.
 #
 # Everything is built in mac/build/ (gitignored). The signed bundle stays at
-# mac/build/Duy My Linear.app — that is what mac/notarize.sh ships — and a copy goes
+# mac/build/Keel.app — that is what mac/notarize.sh ships — and a copy goes
 # to dest-dir. Signing uses a "Developer ID Application" identity when the
 # keychain has one; otherwise it is ad-hoc, which runs on this Mac only.
 set -euo pipefail
@@ -39,8 +39,8 @@ cd "$(dirname "$0")/.."
 REPO="$(pwd)"
 MAC="$REPO/mac"
 BUILD="$MAC/build"
-BUNDLE="$BUILD/Duy My Linear.app"
-APP="$DEST/Duy My Linear.app"
+BUNDLE="$BUILD/Keel.app"
+APP="$DEST/Keel.app"
 
 VERSION="0.1.0"
 BUILD_NUMBER="$(git -C "$REPO" rev-list --count HEAD 2>/dev/null || true)"
@@ -54,7 +54,7 @@ mkdir -p "$BUILD"
 # -swift-version 6: main.swift is written for strict concurrency and builds
 # warning-free under it. Pinned so a toolchain's default can't change the build.
 swiftc -O -swift-version 6 -target "$ARCH-apple-macos$MIN_MACOS" \
-  -o "$BUILD/DuyMyLinear" "$MAC/DuyMyLinear/main.swift" \
+  -o "$BUILD/Keel" "$MAC/Keel/main.swift" \
   -framework AppKit -framework WebKit -framework AuthenticationServices
 
 echo "→ icon…"
@@ -72,7 +72,7 @@ iconutil -c icns "$BUILD/icon.iconset" -o "$BUILD/icon.icns"
 echo "→ bundling…"
 rm -rf "$BUNDLE"
 mkdir -p "$BUNDLE/Contents/MacOS" "$BUNDLE/Contents/Resources"
-cp "$BUILD/DuyMyLinear" "$BUNDLE/Contents/MacOS/DuyMyLinear"
+cp "$BUILD/Keel" "$BUNDLE/Contents/MacOS/Keel"
 cp "$BUILD/icon.icns" "$BUNDLE/Contents/Resources/icon.icns"
 
 cat > "$BUNDLE/Contents/Info.plist" <<PLIST
@@ -80,10 +80,10 @@ cat > "$BUNDLE/Contents/Info.plist" <<PLIST
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-  <key>CFBundleName</key><string>Duy My Linear</string>
-  <key>CFBundleDisplayName</key><string>Duy My Linear</string>
-  <key>CFBundleExecutable</key><string>DuyMyLinear</string>
-  <key>CFBundleIdentifier</key><string>com.duytran.DuyMyLinear</string>
+  <key>CFBundleName</key><string>Keel</string>
+  <key>CFBundleDisplayName</key><string>Keel</string>
+  <key>CFBundleExecutable</key><string>Keel</string>
+  <key>CFBundleIdentifier</key><string>com.duytran.Keel</string>
   <key>CFBundlePackageType</key><string>APPL</string>
   <key>CFBundleInfoDictionaryVersion</key><string>6.0</string>
   <key>CFBundleShortVersionString</key><string>$VERSION</string>
@@ -131,7 +131,7 @@ fi
 touch "$APP"   # nudges Finder and the Dock to pick up a changed icon
 
 echo "✅ $APP  (v$VERSION, build $BUILD_NUMBER, server $SERVER_URL)"
-if pgrep -f "Duy My Linear.app/Contents/MacOS/DuyMyLinear" > /dev/null; then
-  echo "   Duy My Linear is running: ⌘Q it and reopen, or the running copy keeps the old build"
+if pgrep -f "Keel.app/Contents/MacOS/Keel" > /dev/null; then
+  echo "   Keel is running: ⌘Q it and reopen, or the running copy keeps the old build"
   echo "   (a second launch only raises the first — one copy, always)."
 fi

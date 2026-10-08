@@ -1,4 +1,4 @@
-// Duy My Linear server: JSON API, live updates, sign-in, GitHub, MCP, and the web UI's files.
+// Keel server: JSON API, live updates, sign-in, GitHub, MCP, and the web UI's files.
 import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -63,7 +63,7 @@ export function createServer({ dataDir = config.dataDir, webDir: webDirIn = conf
     fs.createReadStream(file).pipe(res);
   }
 
-  // The privacy page names whoever runs this instance (PLUMB_OPERATOR_NAME, PLUMB_CONTACT_EMAIL).
+  // The privacy page names whoever runs this instance (KEEL_OPERATOR_NAME, KEEL_CONTACT_EMAIL).
   function servePrivacy(req, res) {
     const file = path.join(webDir, 'privacy.html');
     if (!fs.existsSync(file)) throw new HttpError(404, 'Not found');
@@ -79,7 +79,7 @@ export function createServer({ dataDir = config.dataDir, webDir: webDirIn = conf
   const server = http.createServer(async (req, res) => {
     let url;
     try {
-      url = new URL(req.url, 'http://plumb.local');
+      url = new URL(req.url, 'http://keel.local');
       const p = url.pathname;
       if (p === '/version') return sendJson(res, 200, { version: config.version });
       if (p === '/health') return sendJson(res, 200, { ok: true });
@@ -118,7 +118,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   app.store.rollOverCycles();
   app.github.start();
   app.server.listen(config.port, config.host, () => {
-    log(`duy-my-linear ${config.version} on http://${config.host}:${config.port} · public ${config.publicUrl} · data ${config.dataDir}`);
+    log(`keel ${config.version} on http://${config.host}:${config.port} · public ${config.publicUrl} · data ${config.dataDir}`);
     log(`  google sign-in: ${config.google.clientId ? 'on' : 'off'} · dev login: ${config.devLogin ? 'ON (localhost only)' : 'off'} · github: webhook ${config.github.webhookSecret ? 'on' : 'off'}, poll ${config.github.token ? 'on' : 'off'}`);
   });
   const shutdown = () => { log('shutting down'); app.close(); process.exit(0); };

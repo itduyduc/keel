@@ -1,9 +1,9 @@
 #!/bin/bash
-# Notarizes and staples Duy My Linear.app so a teammate's Mac opens it without a
+# Notarizes and staples Keel.app so a teammate's Mac opens it without a
 # Gatekeeper warning, then zips the stapled app for sharing.
 #
 #   bash mac/build-app.sh            # must have signed with a Developer ID identity
-#   bash mac/notarize.sh [app]       # default: mac/build/Duy My Linear.app → mac/build/DuyMyLinear.zip
+#   bash mac/notarize.sh [app]       # default: mac/build/Keel.app → mac/build/Keel.zip
 #
 # Auth is the App Store Connect API key in ~/.private_keys/asc.env
 # (ASC_KEY_ID, ASC_ISSUER_ID, ASC_KEY_PATH) — no Apple ID session, no
@@ -20,7 +20,7 @@ fi
 cd "$(dirname "$0")/.."
 REPO="$(pwd)"
 BUILD="$REPO/mac/build"
-APP="${APP:-$BUILD/Duy My Linear.app}"
+APP="${APP:-$BUILD/Keel.app}"
 [ -d "$APP" ] || die "no app at $APP — run: bash mac/build-app.sh"
 
 ENV_FILE="$HOME/.private_keys/asc.env"
@@ -45,9 +45,9 @@ case "$SIGNATURE" in
   *) die "$APP lacks the hardened runtime; rebuild with bash mac/build-app.sh, which signs with --options runtime" ;;
 esac
 
-SUBMISSION="$BUILD/DuyMyLinear-notarize.zip"
+SUBMISSION="$BUILD/Keel-notarize.zip"
 RESULT="$BUILD/notary-result.json"
-SHARE="$BUILD/DuyMyLinear.zip"
+SHARE="$BUILD/Keel.zip"
 mkdir -p "$BUILD"
 
 echo "→ zipping for submission…"

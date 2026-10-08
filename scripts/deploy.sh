@@ -4,7 +4,7 @@
 #
 #   bash scripts/deploy.sh
 #
-# Builds the web UI, copies server/ + web/dist to /opt/plumb on the VM, restarts
+# Builds the web UI, copies server/ + web/dist to /opt/keel on the VM, restarts
 # the service (migrations run at start; open windows reconnect on their own and
 # offer "New version · Reload"), and reads /version from outside before saying done.
 # The Mac app needs no rebuild for any of this: it loads the UI from the server.
@@ -24,7 +24,7 @@ VERSION="$(git rev-parse --short HEAD)$dirty $(date -u +%Y-%m-%dT%H:%MZ)"
 [ -z "$dirty" ] || echo "⚠️  uncommitted edits are going up as $VERSION"
 
 tmp="$(mktemp -d)"; trap 'rm -rf "$tmp"' EXIT
-name="plumb-deploy-$(date +%s)"; stage="$tmp/$name"
+name="keel-deploy-$(date +%s)"; stage="$tmp/$name"
 mkdir -p "$stage/web"
 cp -R server package.json "$stage/"
 cp -R web/dist "$stage/web/dist"
@@ -35,13 +35,13 @@ echo "→ $VERSION → $VM"
 "${G[@]}" ssh "$VM" --zone="$ZONE" --quiet --command "
   set -e
   src=/tmp/$name
-  sudo rm -rf /opt/plumb.next && sudo cp -R \$src /opt/plumb.next
-  sudo rm -rf /opt/plumb.prev && { [ -d /opt/plumb/server ] && sudo mv /opt/plumb /opt/plumb.prev || sudo rm -rf /opt/plumb; }
-  sudo mv /opt/plumb.next /opt/plumb
-  sudo chown -R root:root /opt/plumb
-  sudo systemctl restart plumb; sleep 2
-  if systemctl is-active --quiet plumb; then echo '   service active'
-  else echo '❌ plumb is not active — the previous build is in /opt/plumb.prev'; sudo journalctl -u plumb -n 30 --no-pager; exit 1; fi
+  sudo rm -rf /opt/keel.next && sudo cp -R \$src /opt/keel.next
+  sudo rm -rf /opt/keel.prev && { [ -d /opt/keel/server ] && sudo mv /opt/keel /opt/keel.prev || sudo rm -rf /opt/keel; }
+  sudo mv /opt/keel.next /opt/keel
+  sudo chown -R root:root /opt/keel
+  sudo systemctl restart keel; sleep 2
+  if systemctl is-active --quiet keel; then echo '   service active'
+  else echo '❌ keel is not active — the previous build is in /opt/keel.prev'; sudo journalctl -u keel -n 30 --no-pager; exit 1; fi
   # node takes a couple of seconds to listen; a bare curl under set -e ended the script silently (2026-09-30)
   onvm=''
   for i in 1 2 3 4 5 6 7 8 9 10; do

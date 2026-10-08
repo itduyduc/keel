@@ -21,7 +21,7 @@ const FIELDS: { key: FilterKey; label: string; icon: string }[] = [
 ];
 
 export function useFilters(viewKey: string): [Filters, (f: Filters) => void] {
-  const key = `plumb.filters.${viewKey}`;
+  const key = `keel.filters.${viewKey}`;
   const [filters, setFilters] = useState<Filters>(() => { try { return JSON.parse(localStorage.getItem(key) || '{}'); } catch { return {}; } });
   const save = (f: Filters) => {
     setFilters(f);

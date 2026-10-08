@@ -147,7 +147,7 @@ export function createStore(db, { broadcast = () => {}, version = 'dev' } = {}) 
       if (patch.active !== undefined) set.active = patch.active ? 1 : 0;
       const wouldLoseAdmin = (set.role === 'member' || set.active === 0) && u.role === 'admin';
       if (wouldLoseAdmin && st(`SELECT COUNT(*) AS n FROM users WHERE role = 'admin' AND active = 1 AND id != ?`).get(u.id).n === 0) {
-        throw bad('Duy My Linear needs at least one active admin');
+        throw bad('Keel needs at least one active admin');
       }
     }
     const keys = Object.keys(set);
@@ -222,7 +222,7 @@ export function createStore(db, { broadcast = () => {}, version = 'dev' } = {}) 
   function createToken(user, name) {
     const n = String(name || '').trim().slice(0, 60);
     if (!n) throw bad('Name the token, e.g. "Claude on my MacBook"');
-    const token = `plumb_${randomToken(24)}`;
+    const token = `keel_${randomToken(24)}`;
     st('INSERT INTO api_tokens (user_id, name, token_hash, prefix, created_at) VALUES (?, ?, ?, ?, ?)')
       .run(user.id, n, sha256(token), token.slice(0, 12), now());
     return { token, tokens: listTokens(user) };
@@ -235,7 +235,8 @@ export function createStore(db, { broadcast = () => {}, version = 'dev' } = {}) 
   }
 
   function userForToken(token) {
-    if (!token || !token.startsWith('plumb_')) return null;
+    // tokens issued before the rename to Keel (2026-10-08) start with plumb_ and still work
+    if (!token || !(token.startsWith('keel_') || token.startsWith('plumb_'))) return null;
     const t = st('SELECT * FROM api_tokens WHERE token_hash = ? AND revoked_at IS NULL').get(sha256(token));
     if (!t) return null;
     const u = userRow(t.user_id);
@@ -249,7 +250,7 @@ export function createStore(db, { broadcast = () => {}, version = 'dev' } = {}) 
 
   // ── actors ─────────────────────────────────────────────────────────────
   const actorUserId = (actor) => (actor.kind === 'user' ? actor.user.id : null);
-  const actorName = (actor) => (actor.kind === 'user' ? (actor.user.name || actor.user.email) : actor.kind === 'github' ? 'GitHub' : 'Duy My Linear');
+  const actorName = (actor) => (actor.kind === 'user' ? (actor.user.name || actor.user.email) : actor.kind === 'github' ? 'GitHub' : 'Keel');
   function requireAdmin(actor) {
     if (actor.kind !== 'user' || actor.user.role !== 'admin') throw forbidden('Only admins can do that');
   }

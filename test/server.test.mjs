@@ -27,7 +27,7 @@ test('a fresh database is the team from config, Linear-shaped statuses, and no p
 });
 
 test('numbering starts where the team says (79 here), so no number means two things', async () => {
-  const { body } = await alice.post('/api/issues', { title: 'First Duy My Linear issue' });
+  const { body } = await alice.post('/api/issues', { title: 'First Keel issue' });
   assert.equal(body.identifier, 'PIC-79');
   assert.equal(body.statusId, status('Backlog'));
   const second = await alice.post('/api/issues', { title: 'Second' });
@@ -121,7 +121,7 @@ test('cookie requests need the X-Requested-With header (CSRF)', async () => {
 
 test('a personal token works as a bearer and dies when revoked', async () => {
   const { body } = await alice.post('/api/tokens', { name: 'test' });
-  assert.match(body.token, /^plumb_/);
+  assert.match(body.token, /^keel_/);
   const bearer = client(env.base, { authorization: `Bearer ${body.token}` });
   assert.equal((await bearer.get('/api/me')).body.email, ADMIN);
   // a bearer needs no CSRF header: other sites cannot send one
@@ -133,11 +133,11 @@ test('a personal token works as a bearer and dies when revoked', async () => {
 test('the Mac sign-in hands back a one-time code the shell exchanges for a cookie', async () => {
   const r = await fetch(`${env.base}/auth/dev/as?client=mac&email=${ADMIN}`, { redirect: 'manual' });
   const loc = r.headers.get('location');
-  assert.match(loc, /^plumb:\/\/auth\?code=/);
+  assert.match(loc, /^keel:\/\/auth\?code=/);
   const code = new URL(loc).searchParams.get('code');
   const ex = await fetch(`${env.base}/auth/exchange?code=${code}`, { redirect: 'manual' });
   assert.equal(ex.status, 302);
-  assert.match(ex.headers.get('set-cookie'), /plumb_session=/);
+  assert.match(ex.headers.get('set-cookie'), /keel_session=/);
   const again = await fetch(`${env.base}/auth/exchange?code=${code}`, { redirect: 'manual' });
   assert.equal(again.status, 400, 'a code works once');
 });

@@ -1,8 +1,8 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 
-// In dev, Vite serves the UI and hands everything else to the Duy My Linear server.
-const server = process.env.PLUMB_DEV_SERVER || 'http://127.0.0.1:4747';
+// In dev, Vite serves the UI and hands everything else to the Keel server.
+const server = process.env.KEEL_DEV_SERVER || 'http://127.0.0.1:4747';
 
 export default defineConfig({
   plugins: [react()],

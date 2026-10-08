@@ -1,14 +1,14 @@
-// Duy My Linear — the Mac app: a thin native window around the Duy My Linear web UI.
+// Keel — the Mac app: a thin native window around the Keel web UI.
 //
-// The UI is NOT in this binary. The window loads it from the Duy My Linear server on
+// The UI is NOT in this binary. The window loads it from the Keel server on
 // every launch, so a web deploy reaches all three of us without anyone
 // reinstalling. This file owns only what a web page cannot do for itself: a
 // real Mac window and menus, Google sign-in through the system's
 // authentication session, the clipboard, and links that leave the app.
 //
 //   server  the ServerURL baked into Info.plist by mac/build-app.sh --server <url>,
-//           or `--server <url>` / PLUMB_SERVER at launch
-//   log     ~/Library/Logs/DuyMyLinear/duy-my-linear.log
+//           or `--server <url>` / KEEL_SERVER at launch
+//   log     ~/Library/Logs/Keel/keel.log
 //   build   bash mac/build-app.sh [dest-dir]
 
 import AppKit
@@ -23,10 +23,10 @@ import WebKit
 /// is undebuggable: "the server is down" and "macOS refused the connection"
 /// look identical from outside.
 enum Log {
-    static let path = NSHomeDirectory() + "/Library/Logs/DuyMyLinear/duy-my-linear.log"
+    static let path = NSHomeDirectory() + "/Library/Logs/Keel/keel.log"
     static var displayPath: String { (path as NSString).abbreviatingWithTildeInPath }
 
-    private static let queue = DispatchQueue(label: "com.duytran.DuyMyLinear.log")
+    private static let queue = DispatchQueue(label: "com.duytran.Keel.log")
     private static let limit = 200_000      // bytes; past this the older half goes
     private static let clock = Date.ISO8601FormatStyle(includingFractionalSeconds: true, timeZone: .current)
 
@@ -74,7 +74,7 @@ struct Server {
     let url: URL
     let source: String
 
-    /// `--server <url>`, then PLUMB_SERVER, then the bundle's default. An override
+    /// `--server <url>`, then KEEL_SERVER, then the bundle's default. An override
     /// that is not an http(s) URL with a host is logged and skipped.
     static func resolve() -> Server? {
         var offered: [(value: String, source: String)] = []
@@ -83,8 +83,8 @@ struct Server {
             if i + 1 < args.count { offered.append((args[i + 1], "--server")) }
             else { Log.write("--server was given with no URL — ignored") }
         }
-        if let env = ProcessInfo.processInfo.environment["PLUMB_SERVER"], !env.isEmpty {
-            offered.append((env, "PLUMB_SERVER"))
+        if let env = ProcessInfo.processInfo.environment["KEEL_SERVER"], !env.isEmpty {
+            offered.append((env, "KEEL_SERVER"))
         }
         for choice in offered {
             if let url = parse(choice.value) { return Server(url: url, source: choice.source) }
@@ -125,7 +125,7 @@ struct Server {
 /// (Duy, 2026-09-29). macOS's default action filled the screen and then stayed
 /// there. Minimize and Do Nothing in System Settings ▸ Desktop & Dock are still
 /// honored; only the maximize action becomes a toggle.
-final class PlumbWindow: NSWindow {
+final class KeelWindow: NSWindow {
     private var restoreFrame: NSRect?
 
     override func sendEvent(_ event: NSEvent) {
@@ -137,7 +137,7 @@ final class PlumbWindow: NSWindow {
     }
 
     /// Above the page and not on a traffic light. The title text is a control
-    /// too, but only buttons are exempt, so a double-click on "Duy My Linear" counts.
+    /// too, but only buttons are exempt, so a double-click on "Keel" counts.
     private func inTitleBar(_ point: NSPoint) -> Bool {
         guard point.y >= contentLayoutRect.maxY else { return false }
         var view = contentView?.superview?.hitTest(point)
@@ -220,7 +220,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
         buildMenu()
         buildWindow()
         showWindow()
-        if CommandLine.arguments.contains("--test-titlebar-double-click"), let w = window as? PlumbWindow {
+        if CommandLine.arguments.contains("--test-titlebar-double-click"), let w = window as? KeelWindow {
             Task { @MainActor in
                 try? await Task.sleep(for: .seconds(1))
                 w.selfTestTitleBarDoubleClick()
@@ -263,9 +263,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
 
     private func buildWindow() {
         let config = WKWebViewConfiguration()
-        config.userContentController.add(self, name: "plumb")
+        config.userContentController.add(self, name: "keel")
         config.userContentController.addUserScript(WKUserScript(
-            source: "window.plumbNative = \(nativeInfo());",
+            source: "window.keelNative = \(nativeInfo());",
             injectionTime: .atDocumentStart, forMainFrameOnly: true))
 
         web = WKWebView(frame: .zero, configuration: config)
@@ -275,19 +275,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
         // quietly cancels (seen in a sibling app).
         web.uiDelegate = self
         web.setValue(false, forKey: "drawsBackground")              // no white flash before the page paints
-        if #available(macOS 13.3, *) { web.isInspectable = true }   // Safari ▸ Develop ▸ Duy My Linear
+        if #available(macOS 13.3, *) { web.isInspectable = true }   // Safari ▸ Develop ▸ Keel
 
-        window = PlumbWindow(contentRect: NSRect(x: 0, y: 0, width: 1280, height: 820),
+        window = KeelWindow(contentRect: NSRect(x: 0, y: 0, width: 1280, height: 820),
                           styleMask: [.titled, .closable, .miniaturizable, .resizable],
                           backing: .buffered, defer: false)
-        window.title = "Duy My Linear"
+        window.title = "Keel"
         window.isReleasedWhenClosed = false
         // A REAL title bar, not .fullSizeContentView: with the web view under the
         // title area, title-bar drags and double-click-to-zoom never reach the
         // window. The empty toolbar only gives that bar real height —
         // .unifiedCompact; .unified was too tall and a bare title bar too thin.
         window.titlebarAppearsTransparent = true
-        window.toolbar = NSToolbar(identifier: "PlumbMain")
+        window.toolbar = NSToolbar(identifier: "KeelMain")
         window.toolbarStyle = .unifiedCompact
         window.titlebarSeparatorStyle = .none
         window.appearance = NSAppearance(named: .darkAqua)
@@ -301,7 +301,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
         window.setContentSize(NSSize(width: 1280, height: 820))
         window.delegate = self
         window.center()
-        window.setFrameAutosaveName("PlumbMain")   // after center(), so a saved frame wins
+        window.setFrameAutosaveName("KeelMain")   // after center(), so a saved frame wins
     }
 
     /// `{"platform":"mac","version":"0.1.0"}` — how the page knows it is inside this shell.
@@ -318,16 +318,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
     // may bind them, or the menu would swallow the page's shortcut.
 
     private func buildMenu() {
-        let appMenu = NSMenu(title: "Duy My Linear")
-        item(appMenu, "About Duy My Linear", #selector(NSApplication.orderFrontStandardAboutPanel(_:)))
+        let appMenu = NSMenu(title: "Keel")
+        item(appMenu, "About Keel", #selector(NSApplication.orderFrontStandardAboutPanel(_:)))
         appMenu.addItem(.separator())
         item(appMenu, "Reload", #selector(reloadPage(_:)), "r", target: self)
         appMenu.addItem(.separator())
-        item(appMenu, "Hide Duy My Linear", #selector(NSApplication.hide(_:)), "h")
+        item(appMenu, "Hide Keel", #selector(NSApplication.hide(_:)), "h")
         item(appMenu, "Hide Others", #selector(NSApplication.hideOtherApplications(_:)), "h", [.command, .option])
         item(appMenu, "Show All", #selector(NSApplication.unhideAllApplications(_:)))
         appMenu.addItem(.separator())
-        item(appMenu, "Quit Duy My Linear", #selector(NSApplication.terminate(_:)), "q")
+        item(appMenu, "Quit Keel", #selector(NSApplication.terminate(_:)), "q")
 
         // Text editing inside a WKWebView goes through these: without an Edit
         // menu, ⌘C/⌘V/⌘Z do nothing in the page's fields.
@@ -417,10 +417,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
         let failed = e.userInfo[NSURLErrorFailingURLErrorKey] as? URL
         Log.write("load failed: \(display(failed)) — \(e.localizedDescription) [\(e.domain) \(e.code)]")
         // Replaced by a newer load, or stopped by our own policy (a link sent
-        // outside, a plumb:// URL): nothing is actually broken.
+        // outside, a keel:// URL): nothing is actually broken.
         if e.domain == NSURLErrorDomain && e.code == NSURLErrorCancelled { return }
         if e.domain == "WebKitErrorDomain" && e.code == 102 { return }
-        // Only failing to reach the Duy My Linear server itself is "Can't reach Duy My Linear".
+        // Only failing to reach the Keel server itself is "Can't reach Keel".
         if let host = failed?.host, !server.owns(host) { return }
 
         let target = failed ?? server.url
@@ -443,7 +443,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
         Log.write("can't reach \(display(url)) after a retry — showing the alert")
         let alert = NSAlert()
         alert.alertStyle = .warning
-        alert.messageText = "Can't reach Duy My Linear"
+        alert.messageText = "Can't reach Keel"
         alert.informativeText = "\(display(url))\n\(error.localizedDescription)\n\n"
             + "Press ⌘R to try again. Details are in \(Log.displayPath)."
         alert.beginSheetModal(for: sheetWindow) { [weak self] _ in self?.alertUp = false }
@@ -492,8 +492,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
         guard let url = navigationAction.request.url else { return decisionHandler(.allow) }
         // Sign-in comes back through ASWebAuthenticationSession, never the page.
         // (The URL is not logged: it may carry a sign-in code.)
-        if url.scheme?.lowercased() == "plumb" {
-            Log.write("ignored a plumb:// navigation inside the page")
+        if url.scheme?.lowercased() == "keel" {
+            Log.write("ignored a keel:// navigation inside the page")
             return decisionHandler(.cancel)
         }
         if navigationAction.targetFrame == nil || navigationAction.navigationType == .linkActivated,
@@ -516,11 +516,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
         return parts.string ?? url.absoluteString
     }
 
-    // MARK: Bridge: window.webkit.messageHandlers.plumb.postMessage({action, …})
+    // MARK: Bridge: window.webkit.messageHandlers.keel.postMessage({action, …})
 
     func userContentController(_ userContentController: WKUserContentController,
                                didReceive message: WKScriptMessage) {
-        // Only the Duy My Linear page itself may drive the shell, never a frame from elsewhere.
+        // Only the Keel page itself may drive the shell, never a frame from elsewhere.
         let origin = message.frameInfo.securityOrigin
         guard message.frameInfo.isMainFrame, server.owns(origin.host) else {
             Log.write("bridge: ignored a message from \(origin.protocol)://\(origin.host)"
@@ -556,7 +556,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
     /// session. Google refuses to sign in inside an embedded web view, and the
     /// session shares the browser's cookies, so a teammate already signed in
     /// to Google just picks an account. The server ends by redirecting to
-    /// plumb://auth?code=…, which the session hands back here.
+    /// keel://auth?code=…, which the session hands back here.
     private func startSignIn() {
         if let running = authSession {
             // A session whose browser tab was simply closed may never call back.
@@ -570,7 +570,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
         authStarted = Date()
         let url = server.endpoint("/auth/google", "client", "mac")
         // The handler's thread is not promised, so it hops to the main actor itself.
-        let session = ASWebAuthenticationSession(url: url, callbackURLScheme: "plumb") { @Sendable callback, error in
+        let session = ASWebAuthenticationSession(url: url, callbackURLScheme: "keel") { @Sendable callback, error in
             Task { @MainActor in self.finishSignIn(id, callback, error) }
         }
         session.presentationContextProvider = self
@@ -617,7 +617,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
     /// through JSON so no quote or newline in an error message can break the script.
     private func signInFailed(_ reason: String) {
         let literal = (try? JSONEncoder().encode(reason)).flatMap { String(data: $0, encoding: .utf8) } ?? "\"error\""
-        web.evaluateJavaScript("window.plumbSignInFailed && window.plumbSignInFailed(\(literal))",
+        web.evaluateJavaScript("window.keelSignInFailed && window.keelSignInFailed(\(literal))",
                                completionHandler: nil)
     }
 
@@ -707,7 +707,7 @@ if !isOneShotLaunch, let mine = Bundle.main.bundleIdentifier {
 
 guard let server = Server.resolve() else {
     // A bundle built without --server, and no override given: nothing to load.
-    Log.write("no server: Info.plist has no ServerURL and neither --server nor PLUMB_SERVER was given")
+    Log.write("no server: Info.plist has no ServerURL and neither --server nor KEEL_SERVER was given")
     Log.flush()
     let app = NSApplication.shared
     app.setActivationPolicy(.regular)
