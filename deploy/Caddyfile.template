@@ -1,0 +1,7 @@
+# Appended to /etc/caddy/Caddyfile by scripts/setup-vm.sh, with DOMAIN filled in.
+# The app binds 127.0.0.1:4747; only Caddy is public. Caddy streams text/event-stream
+# without buffering, which the live updates need.
+${DOMAIN} {
+	encode zstd gzip
+	reverse_proxy 127.0.0.1:4747
+}

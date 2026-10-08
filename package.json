@@ -1,0 +1,14 @@
+{
+  "name": "duy-my-linear",
+  "private": true,
+  "type": "module",
+  "description": "A minimal, self-hosted Linear for a small team: Mac app, Google sign-in, GitHub PRs, MCP for Claude",
+  "license": "MIT",
+  "engines": { "node": ">=22.13" },
+  "scripts": {
+    "start": "NODE_NO_WARNINGS=1 node server/index.js",
+    "dev": "PLUMB_DEV_LOGIN=1 NODE_NO_WARNINGS=1 node --watch-path=server server/index.js",
+    "test": "NODE_NO_WARNINGS=1 node --test test/*.test.mjs",
+    "build": "npm --prefix web run build"
+  }
+}
