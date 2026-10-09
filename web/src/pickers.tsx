@@ -2,13 +2,22 @@
 // so the same picker edits a saved issue or a draft in the create dialog.
 import { getState, updateIssue } from './state';
 import { openMenu, anchorOf, type MenuOption, type RectLike } from './components/Menu';
-import { StatusIcon, PriorityIcon, CycleIcon, ProjectIcon, Icon } from './icons';
+import { StatusIcon, PriorityIcon, CycleIcon, ProjectIcon, TeamIcon, Icon } from './icons';
 import { Avatar, LabelDot } from './components/bits';
-import { PRIORITY_NAMES, PRIORITY_ORDER, cycleSpan, dayLabel, estimateLabel, todayString } from './util';
+import { PRIORITY_NAMES, PRIORITY_ORDER, cycleSpan, dayLabel, estimateLabel, teamOf, todayString } from './util';
+import { toast } from './toast';
 import type { Issue, IssuePatch } from './types';
 
 type Anchor = Element | RectLike | null | undefined;
 const data = () => getState().data!;
+
+export function pickTeam(value: number, anchor: Anchor, onChange: (id: number) => void) {
+  openMenu({
+    anchor: anchorOf(anchor), placeholder: 'Team…', numbered: true,
+    options: () => data().teams.map((t) => ({ key: String(t.id), label: t.name, keywords: t.key, icon: <TeamIcon color={t.color} size={14} />, right: <span className="muted">{t.key}</span>, selected: t.id === value })),
+    onSelect: (o) => onChange(Number(o.key)),
+  });
+}
 
 export function pickStatus(value: number, anchor: Anchor, onChange: (id: number) => void) {
   openMenu({
@@ -98,7 +107,7 @@ export function pickEstimate(value: number | null, anchor: Anchor, onChange: (n:
     anchor: anchorOf(anchor), placeholder: 'Set estimate…', numbered: true,
     options: () => {
       const d = data();
-      const scale = d.team.estimateScales[d.team.estimateScale];
+      const scale = d.workspace.estimateScales[d.workspace.estimateScale];
       return [
         { key: 'none', label: 'No estimate', icon: <Icon name="estimate" color="#6e6e73" />, selected: value === null },
         ...scale.values.map((v) => ({ key: String(v), label: scale.names ? estimateLabel(d, v)! : `${v} point${v === 1 ? '' : 's'}`, icon: <Icon name="estimate" color="#9b9b9e" />, selected: v === value })),
@@ -179,7 +188,11 @@ export const issuePickers = {
   assignee: (i: Issue, a: Anchor) => pickAssignee(i.assigneeId, a, (v) => updateIssue(i, { assigneeId: v })),
   labels: (i: Issue, a: Anchor) => pickLabels(() => currentIssue(i).labelIds, a, (v) => updateIssue(currentIssue(i), { labelIds: v })),
   project: (i: Issue, a: Anchor) => pickProject(i.projectId, a, (v) => updateIssue(i, { projectId: v })),
-  cycle: (i: Issue, a: Anchor) => pickCycle(i.cycle, a, (v) => updateIssue(i, { cycle: v })),
+  cycle: (i: Issue, a: Anchor) => {
+    const t = teamOf(data(), i.teamId);
+    if (!t.cyclesEnabled) return toast(`${t.name} doesn't run cycles`);
+    pickCycle(i.cycle, a, (v) => updateIssue(i, { cycle: v }));
+  },
   estimate: (i: Issue, a: Anchor) => pickEstimate(i.estimate, a, (v) => updateIssue(i, { estimate: v })),
   dueDate: (i: Issue, a: Anchor) => pickDueDate(i.dueDate, a, (v) => updateIssue(i, { dueDate: v })),
   parent: (i: Issue, a: Anchor) => pickParent(i, i.parentId, a, (v) => updateIssue(i, { parentId: v } as IssuePatch)),

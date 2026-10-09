@@ -28,9 +28,10 @@ scripts/ deploy/             gcloud-driven VM setup, deploy, backup; systemd + C
 - **Every write goes through `server/store.js`.** REST, MCP, GitHub and the cycle rollover all call it, so validation, the activity trail and live updates cannot drift apart.
 - **Google refuses OAuth inside a web view** (403 disallowed_useragent). The Mac shell signs in with ASWebAuthenticationSession and a one-time code (`/auth/exchange`); never "fix" sign-in by loading Google in the WKWebView.
 - **PR status automation only moves forward**: open (not draft) → In Review; all linked PRs merged or closed with ≥1 merged → Done; nothing leaves Done/Canceled/Duplicate.
-- **Cycles are computed, not stored**: weekly from the anchor Monday in the team's zone. Unfinished issues in an ended cycle roll into the current one every minute.
-- **The first-run seed is read once.** `KEEL_TEAM_*` shape a new database; after that the database wins, and a change needs a migration or Settings.
-- **Migrations append to `MIGRATIONS` in `db.js`**, never edit an entry: `PRAGMA user_version` counts them.
+- **Teams own a key, their issue numbers and a cycles switch; nothing else.** Statuses, labels, projects, the estimate scale and the cycle weeks are workspace-wide. An issue is `<key>-<number>` and never changes team; a team's key never changes. Store functions take that identifier, not a number: a bare `79` only resolves while one team has a 79.
+- **Cycles are computed, not stored**: weekly from the anchor Monday in the workspace's zone, the same weeks for every team that runs them. Unfinished issues in an ended cycle roll into the current one every minute, in teams with cycles on.
+- **The first-run seed is read once.** `KEEL_TEAM_*` shape a new database and its first team; after that the database wins, and a change needs a migration or Settings.
+- **Migrations append to `MIGRATIONS` in `db.js`**, never edit an entry: `PRAGMA user_version` counts them. They run with foreign keys off and `foreign_key_check` before commit, SQLite's recipe for rebuilding a table others point at (migration 2 rebuilt `issues`).
 - **The Mac app is one instance.** A second launch raises the first and exits; one-shot `--flag` launches are exempt.
 
 ## Gotchas

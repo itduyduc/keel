@@ -118,8 +118,19 @@ code { font-family: var(--mono); }
 .nav-label { overflow: hidden; text-overflow: ellipsis; }
 .nav-count { margin-left: auto; font-size: 12px; color: var(--text-3); }
 .nav-section { font-size: 12px; color: #6e6e73; padding: 16px 8px 4px; font-weight: 500; }
-.nav-team { display: flex; align-items: center; gap: 8px; padding: 4px 8px; font-size: 13px; color: var(--text); font-weight: 500; }
-.nav-indent { padding-left: 12px; }
+.nav-section-row { display: flex; align-items: center; justify-content: space-between; padding-right: 2px; }
+.nav-add { width: 20px; height: 20px; color: #6e6e73; opacity: 0; }
+.nav-section-row:hover .nav-add, .nav-add:focus-visible { opacity: 1; }
+.nav-add:hover { background: #19191b; color: var(--text); }
+.nav-team {
+  width: 100%; display: flex; align-items: center; gap: 8px; height: 28px; padding: 0 8px; border-radius: 6px;
+  background: none; border: 0; font-size: 13px; color: var(--text); font-weight: 500; text-align: left; white-space: nowrap;
+}
+.nav-team:hover { background: #19191b; }
+.nav-team > span:nth-child(2) { overflow: hidden; text-overflow: ellipsis; }
+.nav-caret { display: flex; color: var(--text-3); transition: transform 0.12s; }
+.nav-caret.closed { transform: rotate(-90deg); }
+.nav-indent { padding-left: 12px; margin-bottom: 4px; }
 .sidebar-bottom { display: flex; flex-direction: column; gap: 2px; padding-top: 8px; }
 .me-row { display: flex; align-items: center; gap: 8px; padding: 6px 8px 0; font-size: 12.5px; color: var(--text-2); }
 .update-pill {
@@ -187,7 +198,7 @@ code { font-family: var(--mono); }
 }
 .issue-row.focused { background: var(--bg-hover); }
 .row-priority { width: 16px; margin-right: 10px; display: flex; flex-shrink: 0; }
-.row-id { width: 54px; flex-shrink: 0; color: var(--text-2); font-size: 13px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.row-id { width: auto; min-width: 54px; flex-shrink: 0; color: var(--text-2); font-size: 13px; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .row-status { display: flex; margin-right: 10px; flex-shrink: 0; }
 .row-title { flex: 1 1 auto; min-width: 60px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-strong); font-size: 13px; font-weight: 500; }
 .row-meta { display: flex; align-items: center; gap: 4px; margin-left: 12px; min-width: 0; overflow: hidden; flex-shrink: 1; justify-content: flex-end; }
@@ -360,6 +371,10 @@ code { font-family: var(--mono); }
 .color-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px; padding: 12px; }
 .color-grid button { width: 22px; height: 22px; border-radius: 50%; border: 2px solid transparent; }
 .color-grid button.on { border-color: #fff; }
+.color-grid.inline { display: flex; flex-wrap: wrap; padding: 2px 0; }
+.color-grid button:disabled { cursor: default; opacity: 0.6; }
+.settings-section h2 .crumb { color: var(--text-2); cursor: pointer; }
+.settings-section > .btn { margin-bottom: 4px; }
 .icon-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 4px; padding: 8px; }
 .icon-grid button { height: 30px; border: 0; background: none; border-radius: 6px; display: flex; align-items: center; justify-content: center; }
 .icon-grid button:hover, .icon-grid button.on { background: #28282c; }
@@ -375,7 +390,8 @@ code { font-family: var(--mono); }
 }
 .dialog-head { display: flex; align-items: center; gap: 8px; padding: 12px 14px 0 18px; font-size: 13px; color: var(--text); }
 .dialog-close { margin-left: auto; }
-.team-chip { display: inline-flex; align-items: center; gap: 6px; height: 24px; padding: 0 8px; border-radius: 6px; border: 1px solid #2c2c30; font-weight: 500; font-size: 12px; }
+.team-chip { display: inline-flex; align-items: center; gap: 6px; height: 24px; padding: 0 8px; border-radius: 6px; border: 1px solid #2c2c30; font-weight: 500; font-size: 12px; background: none; color: var(--text); }
+.team-chip:hover { background: #19191b; }
 .create-title {
   display: block; width: 100%; padding: 16px 18px 6px; border: 0; outline: none; background: none;
   color: var(--text-strong); font-size: 18px; font-weight: 600;

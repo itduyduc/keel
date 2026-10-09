@@ -2,7 +2,7 @@
 import { deleteIssue, getState, updateIssue } from './state';
 import { issuePickers } from './pickers';
 import { openMenu, type MenuOption } from './components/Menu';
-import { branchName, copy, issueUrl } from './util';
+import { branchName, copy, issueUrl, teamOf, teamPath } from './util';
 import { navigate } from './router';
 import { openCreate } from './ui';
 import { Icon } from './icons';
@@ -16,7 +16,7 @@ export const assignToMe = (i: Issue) => updateIssue(i, { assigneeId: i.assigneeI
 export function confirmDelete(i: Issue) {
   if (window.confirm(`Delete ${i.identifier} "${i.title}"?`)) {
     deleteIssue(i);
-    if (location.pathname.startsWith('/issue/')) navigate('/issues');
+    if (location.pathname.startsWith('/issue/')) navigate(teamPath(teamOf(getState().data!, i.teamId)));
   }
 }
 
@@ -30,11 +30,11 @@ export function contextMenu(i: Issue, e: { clientX: number; clientY: number }) {
     row('assignee', 'Assignee', 'user', () => issuePickers.assignee(i, at), 'A'),
     row('labels', 'Labels', 'tag', () => issuePickers.labels(i, at), 'L'),
     row('project', 'Project', 'projects', () => issuePickers.project(i, at), '⇧P'),
-    row('cycle', 'Cycle', 'cycles', () => issuePickers.cycle(i, at), '⇧C'),
+    ...(teamOf(getState().data!, i.teamId).cyclesEnabled ? [row('cycle', 'Cycle', 'cycles', () => issuePickers.cycle(i, at), '⇧C')] : []),
     row('estimate', 'Estimate', 'estimate', () => issuePickers.estimate(i, at), '⇧E'),
     row('due', 'Due date', 'calendar', () => issuePickers.dueDate(i, at), '⇧D'),
     row('parent', 'Set parent…', 'subissue', () => issuePickers.parent(i, at)),
-    row('sub', 'Add sub-issue', 'plus', () => openCreate({ parentId: i.id, projectId: i.projectId, cycle: i.cycle })),
+    row('sub', 'Add sub-issue', 'plus', () => openCreate({ teamId: i.teamId, parentId: i.id, projectId: i.projectId, cycle: i.cycle })),
     row('copy-id', 'Copy ID', 'copy', () => copyId(i), '⌘.'),
     row('copy-link', 'Copy link', 'link', () => copyLink(i), '⌘⇧,'),
     row('copy-branch', 'Copy git branch name', 'branch', () => copyBranch(i), '⌘⇧.'),

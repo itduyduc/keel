@@ -19,12 +19,13 @@ Nothing ships with it: the database is created empty on the first start, and not
 ## What it has
 
 - Issues with status, priority, assignee, labels, project, estimate, parent, weekly cycles.
+- Teams, like Linear's: each has its own issue prefix and numbering (`ENG-1`, `DES-1`) and turns cycles on or off. Statuses, labels, projects and the cycle weeks are shared. Admins create them in Settings ▸ Teams.
 - Live updates: every open window sees a change the moment it is saved.
 - Markdown descriptions and comments (TipTap editor), @mentions, reactions, an activity trail.
 - Google sign-in, invite-only: an admin adds an email, that person can sign in.
 - A pull request whose branch or title names `TM-12` attaches to that issue and moves it: opened → In Review, merged → Done.
 - An MCP server with personal tokens: Claude creates, updates and comments as the token's owner.
-- One team, no accounts to host, no database server. Node 22.13+ only.
+- No accounts to host, no database server. Node 22.13+ only.
 
 ## Run it locally
 
@@ -36,7 +37,7 @@ npm test                        # server tests on a throwaway database
 ```
 
 Dev login signs in as any member without Google and only answers on localhost.
-The team's name, issue prefix and first issue number are read from `.env` on the first start, when the database is created.
+The first team's name, issue prefix and first issue number are read from `.env` on the first start, when the database is created; more teams come from Settings ▸ Teams.
 
 ## Google sign-in
 
@@ -83,7 +84,8 @@ Settings ▸ API & Claude ▸ Create token, then:
 claude mcp add --scope user --transport http keel https://your.tracker/mcp --header "Authorization: Bearer keel_…"
 ```
 
-Tools: `list_issues`, `get_issue`, `save_issue`, `save_comment`, `list_comments`, `list_issue_statuses`, `list_issue_labels`, `list_projects`, `list_cycles`, `list_users`.
+Tools: `list_issues`, `get_issue`, `save_issue`, `save_comment`, `list_comments`, `list_teams`, `list_issue_statuses`, `list_issue_labels`, `list_projects`, `list_cycles`, `list_users`.
+A new issue goes to the first team unless `save_issue` names another.
 
 ## Settings
 

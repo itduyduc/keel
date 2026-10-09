@@ -53,6 +53,13 @@ export function cycleRange(n, cfg) {
   };
 }
 
+// the Monday of this week in this zone, as YYYY-MM-DD
+export function lastMonday(tz, utcMs = Date.now()) {
+  const today = localDate(utcMs, tz);
+  const dow = new Date(dayNumber(today) * DAY).getUTCDay(); // 0 Sunday … 6 Saturday
+  return addDays(today, -((dow + 6) % 7));
+}
+
 // what the UI and the MCP show: recent past, current, and the next few
 export function cycleList(cfg, nowMs = Date.now(), { past = 6, upcoming = 3 } = {}) {
   const current = cycleNumberAt(nowMs, cfg);

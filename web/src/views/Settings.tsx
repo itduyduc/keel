@@ -1,13 +1,13 @@
 import { useEffect, useState } from 'react';
-import { useApp, saveLabel, saveProject, signOut } from '../state';
+import { useApp, saveLabel, saveProject, saveTeam, signOut } from '../state';
 import { get, post, patch, del } from '../api';
 import { navigate } from '../router';
 import { toast } from '../toast';
-import { copy } from '../util';
+import { copy, teamByKey, teamPath } from '../util';
 import { Avatar, LabelDot } from '../components/bits';
-import { Icon, ProjectIcon, PROJECT_ICON_NAMES } from '../icons';
+import { Icon, ProjectIcon, TeamIcon, PROJECT_ICON_NAMES } from '../icons';
 import { openMenu, anchorOf } from '../components/Menu';
-import type { Label, Project, User } from '../types';
+import type { Bootstrap, Label, Project, Team, User } from '../types';
 
 const SECTIONS = [
   { key: 'profile', label: 'Profile', icon: 'user' },
@@ -16,11 +16,13 @@ const SECTIONS = [
   { key: 'labels', label: 'Labels', icon: 'tag' },
   { key: 'projects', label: 'Projects', icon: 'projects' },
   { key: 'github', label: 'GitHub', icon: 'github' },
-  { key: 'team', label: 'Team', icon: 'settings' },
+  { key: 'teams', label: 'Teams', icon: 'users' },
+  { key: 'workspace', label: 'Workspace', icon: 'settings' },
 ];
 const COLORS = ['#bec2c8', '#95a2b3', '#5e6ad2', '#26b5ce', '#4cb782', '#f2c94c', '#f2994a', '#fc7840', '#eb5757', '#bb87fc', '#9b7bff', '#4ea7fc'];
 
-export function Settings({ section }: { section: string }) {
+export function Settings({ section: asked, sub }: { section: string; sub: string | null }) {
+  const section = asked === 'team' ? 'teams' : asked; // /settings/team, from before there were teams
   return (
     <>
       <header className="topbar"><div className="crumbs"><Icon name="settings" size={16} color="#9b9b9e" /><span className="view-title">Settings</span></div></header>
@@ -40,7 +42,8 @@ export function Settings({ section }: { section: string }) {
             {section === 'labels' && <Labels />}
             {section === 'projects' && <Projects />}
             {section === 'github' && <GitHub />}
-            {section === 'team' && <TeamSettings />}
+            {section === 'teams' && <TeamsSection sub={sub} />}
+            {section === 'workspace' && <WorkspaceSettings />}
           </div>
         </div>
       </div>
@@ -67,7 +70,7 @@ function Profile() {
       <div className="profile-card"><Avatar user={me} size={40} /><div><div>{me.name}</div><div className="muted small">{me.email} · {me.role}</div></div></div>
       <Field label="Name"><input value={name} onChange={(e) => setName(e.target.value)} /></Field>
       <Field label="Mention handle" hint={<>Teammates mention you as <code>@{handle}</code>.</>}><input value={handle} onChange={(e) => setHandle(e.target.value)} /></Field>
-      <Field label="Git branch prefix" hint={<>Branch names look like <code>{gitHandle}/{data!.team.key.toLowerCase()}-80-short-title</code>.</>}><input value={gitHandle} onChange={(e) => setGitHandle(e.target.value)} /></Field>
+      <Field label="Git branch prefix" hint={<>Branch names look like <code>{gitHandle}/{data!.teams[0].key.toLowerCase()}-80-short-title</code>.</>}><input value={gitHandle} onChange={(e) => setGitHandle(e.target.value)} /></Field>
       <div className="row-gap"><button className="btn primary" onClick={save}>Save</button><button className="btn ghost" onClick={() => signOut()}><Icon name="logout" size={14} /> Sign out</button></div>
     </div>
   );
@@ -228,11 +231,11 @@ function GitHub() {
   const { data } = useApp();
   const [s, setS] = useState<GhStatus | null>(null);
   useEffect(() => { get<GhStatus>('/api/github/status').then(setS).catch(() => {}); }, []);
-  const key = data!.team.key;
+  const key = data!.teams[0].key;
   return (
     <div className="settings-section">
       <h2>GitHub</h2>
-      <p className="muted">A pull request whose branch or title contains <code>{key}-123</code> attaches to that issue. Opening it moves the issue to In Review; once every linked PR is merged or closed, with at least one merged, it moves to Done. A draft, or a PR closed without merging, moves nothing.</p>
+      <p className="muted">A pull request whose branch or title contains an issue id, like <code>{key}-123</code>, attaches to that issue. Opening it moves the issue to In Review; once every linked PR is merged or closed, with at least one merged, it moves to Done. A draft, or a PR closed without merging, moves nothing.</p>
       {s && (
         <div className="kv">
           <span>Organization</span><span>{s.org}</span>
@@ -246,24 +249,130 @@ function GitHub() {
   );
 }
 
-function TeamSettings() {
+// What every team shares. The cycle schedule is read from the first start (KEEL_CYCLE_ANCHOR).
+function WorkspaceSettings() {
   const { data } = useApp();
   const d = data!;
   const admin = d.me.role === 'admin';
-  const setScale = async (estimateScale: string) => { try { await patch('/api/team', { estimateScale }); toast('Estimate scale saved'); } catch (e) { toast((e as Error).message, 'error'); } };
+  const setScale = async (estimateScale: string) => { try { await patch('/api/workspace', { estimateScale }); toast('Estimate scale saved'); } catch (e) { toast((e as Error).message, 'error'); } };
   return (
     <div className="settings-section">
-      <h2>Team</h2>
+      <h2>Workspace</h2>
+      <p className="muted">Shared by every team: statuses, labels, projects, the cycle weeks and the estimate scale.</p>
       <div className="kv">
-        <span>Name</span><span>{d.team.name}</span>
-        <span>Issue prefix</span><span><code>{d.team.key}</code></span>
-        <span>Cycles</span><span>Weekly, starting Monday 00:00 ({d.team.cycle.tz}); unfinished issues roll into the next cycle.</span>
+        <span>Name</span><span>{d.workspace.name}</span>
+        <span>Cycles</span><span>Weekly, starting Monday 00:00 ({d.workspace.cycle.tz}), for each team that runs them; unfinished issues roll into the next cycle.</span>
       </div>
       <Field label="Estimate scale" hint={admin ? undefined : 'Only admins can change this.'}>
-        <select value={d.team.estimateScale} disabled={!admin} onChange={(e) => setScale(e.target.value)}>
-          {Object.entries(d.team.estimateScales).map(([k, v]) => <option key={k} value={k}>{v.label} — {(v.names || v.values).join(', ')}</option>)}
+        <select value={d.workspace.estimateScale} disabled={!admin} onChange={(e) => setScale(e.target.value)}>
+          {Object.entries(d.workspace.estimateScales).map(([k, v]) => <option key={k} value={k}>{v.label} — {(v.names || v.values).join(', ')}</option>)}
         </select>
       </Field>
+    </div>
+  );
+}
+
+// ── teams ──────────────────────────────────────────────────────────────────
+function TeamsSection({ sub }: { sub: string | null }) {
+  const { data } = useApp();
+  const d = data!;
+  if (sub === 'new') return <CreateTeam />;
+  const team = teamByKey(d, sub);
+  if (sub && !team) return <div className="settings-section"><h2>No team {sub}</h2></div>;
+  if (team) return <TeamSettings team={team} key={team.id} />;
+  return (
+    <div className="settings-section">
+      <h2>Teams</h2>
+      <p className="muted">Each team has its own issue ids and numbering, and decides whether it runs cycles.</p>
+      {d.me.role === 'admin' && <button className="btn primary small" onClick={() => navigate('/settings/teams/new')}><Icon name="plus" size={14} /> Create team</button>}
+      <div className="table-list">
+        {d.teams.map((t) => (
+          <div key={t.id} className="table-row" onClick={() => navigate(`/settings/teams/${t.key}`)}>
+            <span className="table-name"><TeamIcon color={t.color} size={16} /> {t.name} <span className="muted small">{t.key}</span></span>
+            <span className="muted small">{d.issues.filter((i) => i.teamId === t.id).length} issues</span>
+            <span className="muted small">{t.cyclesEnabled ? 'Cycles' : 'No cycles'}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// "Engineering" → ENG, "Design Ops" → DO, the way Linear suggests one
+function suggestKey(name: string) {
+  const words = name.toUpperCase().split(/[^A-Z]+/).filter(Boolean);
+  return (words.length > 1 ? words.map((w) => w[0]).join('') : words[0]?.slice(0, 3) || '').slice(0, 5);
+}
+// the first color no team has yet, past the two grays
+const unusedColor = (d: Bootstrap) => COLORS.slice(2).find((c) => !d.teams.some((t) => t.color === c)) || COLORS[2];
+
+function ColorRow({ value, onPick, disabled }: { value: string; onPick: (c: string) => void; disabled?: boolean }) {
+  return (
+    <div className="color-grid inline">
+      {COLORS.map((c) => <button type="button" key={c} disabled={disabled} style={{ background: c }} className={c === value ? 'on' : ''} onClick={() => onPick(c)} />)}
+    </div>
+  );
+}
+
+function CreateTeam() {
+  const { data } = useApp();
+  const d = data!;
+  const [name, setName] = useState('');
+  const [typedKey, setTypedKey] = useState<string | null>(null);
+  const [color, setColor] = useState(() => unusedColor(d));
+  const [busy, setBusy] = useState(false);
+  const key = typedKey ?? suggestKey(name);
+  if (d.me.role !== 'admin') return <div className="settings-section"><h2>Create a team</h2><p className="muted">Only admins can create teams.</p></div>;
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setBusy(true);
+    const t = await saveTeam({ name, key, color });
+    setBusy(false);
+    if (t) { toast(`Created ${t.name}`); navigate(teamPath(t)); }
+  };
+  return (
+    <form className="settings-section" onSubmit={submit}>
+      <h2>Create a team</h2>
+      <p className="muted">Statuses, labels and projects are shared with your other teams. Cycles start off; turn them on in the team's settings.</p>
+      <Field label="Team name"><input value={name} onChange={(e) => setName(e.target.value)} placeholder="Engineering" autoFocus /></Field>
+      <Field label="Identifier" hint={<>Every issue id starts with it: <code>{key || 'ENG'}-1</code>. 1 to 5 letters. It cannot change later.</>}>
+        <input value={key} onChange={(e) => setTypedKey(e.target.value.toUpperCase().replace(/[^A-Z]/g, '').slice(0, 5))} placeholder="ENG" />
+      </Field>
+      <div className="field"><span className="field-label">Color</span><ColorRow value={color} onPick={setColor} /></div>
+      <div className="row-gap">
+        <button className="btn primary" type="submit" disabled={busy || !name.trim() || !key}>Create team</button>
+        <button className="btn ghost" type="button" onClick={() => navigate('/settings/teams')}>Cancel</button>
+      </div>
+    </form>
+  );
+}
+
+function TeamSettings({ team }: { team: Team }) {
+  const { data } = useApp();
+  const d = data!;
+  const admin = d.me.role === 'admin';
+  const [name, setName] = useState(team.name);
+  const save = async (patch: { name?: string; color?: string; cyclesEnabled?: boolean }) => { if (await saveTeam(patch, team)) toast('Team saved'); };
+  return (
+    <div className="settings-section">
+      <h2><span className="crumb" onClick={() => navigate('/settings/teams')}>Teams</span> <Icon name="chevronRight" size={12} className="crumb-sep" /> {team.name}</h2>
+      <div className="kv">
+        <span>Identifier</span><span><code>{team.key}</code> · issues are {team.key}-1, {team.key}-2, … It cannot change.</span>
+        <span>Issues</span><span>{d.issues.filter((i) => i.teamId === team.id).length}</span>
+      </div>
+      <form className="field" onSubmit={(e) => { e.preventDefault(); if (name.trim() && name !== team.name) save({ name }); }}>
+        <span className="field-label">Name</span>
+        <div className="row-gap">
+          <input value={name} disabled={!admin} onChange={(e) => setName(e.target.value)} />
+          {admin && <button className="btn primary" type="submit" disabled={!name.trim() || name === team.name}>Save</button>}
+        </div>
+      </form>
+      <div className="field"><span className="field-label">Color</span><ColorRow value={team.color} disabled={!admin} onPick={(color) => save({ color })} /></div>
+      <div className="field">
+        <label className="toggle"><input type="checkbox" checked={team.cyclesEnabled} disabled={!admin} onChange={(e) => save({ cyclesEnabled: e.target.checked })} /> Cycles</label>
+        <span className="field-hint">Weekly, from Monday 00:00 ({d.workspace.cycle.tz}), the same weeks as every team that runs them. Unfinished issues roll into the next cycle.</span>
+      </div>
+      {!admin && <p className="muted small">Only admins can change a team.</p>}
     </div>
   );
 }

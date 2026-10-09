@@ -17,6 +17,7 @@ import { Decoration, DecorationSet } from '@tiptap/pm/view';
 import type { Node as PMNode } from '@tiptap/pm/model';
 import { getState, useApp } from '../state';
 import { navigate } from '../router';
+import { issueIdIndex, refPattern } from '../util';
 import type { User } from '../types';
 
 // ── @mentions: a picker that inserts plain "@handle " text ─────────────────
@@ -103,8 +104,8 @@ function tokenDecorations(doc: PMNode) {
   const data = getState().data;
   if (!data) return DecorationSet.empty;
   const handles = new Set(data.users.map((u) => u.handle.toLowerCase()));
-  const numbers = new Set(data.issues.map((i) => i.number));
-  const re = new RegExp(`(^|[^A-Za-z0-9_.@])(@[A-Za-z0-9._-]+|${data.team.key}-\\d+)`, 'g');
+  const ids = issueIdIndex(data);
+  const re = new RegExp(`(^|[^A-Za-z0-9_.@])(@[A-Za-z0-9._-]+|${refPattern(data)})`, 'g');
   const decos: Decoration[] = [];
   doc.descendants((node, pos, parent) => {
     if (node.type.name === 'codeBlock') return false;
@@ -115,7 +116,7 @@ function tokenDecorations(doc: PMNode) {
       const from = pos + (m.index ?? 0) + m[1].length;
       if (token.startsWith('@')) {
         if (handles.has(token.slice(1).toLowerCase().replace(/[._-]+$/, ''))) decos.push(Decoration.inline(from, from + token.length, { class: 'mention' }));
-      } else if (numbers.has(Number(token.split('-')[1]))) {
+      } else if (ids.has(token.toUpperCase())) {
         decos.push(Decoration.inline(from, from + token.length, { class: 'issue-ref', 'data-issue': token.toUpperCase() }));
       }
     }

@@ -1,7 +1,9 @@
 import { useSyncExternalStore } from 'react';
 
-// Paths are the app's addresses: /issues, /issue/PIC-80, /my-issues, /projects, /project/2,
-// /cycles, /cycle/5, /settings. The server hands every one of them the same page.
+// Paths are the app's addresses: /team/PIC/all, /team/PIC/cycles, /team/PIC/cycle/5,
+// /issue/PIC-80, /my-issues, /projects, /project/2, /settings/teams/PIC. The server hands
+// every one of them the same page. /issues, /cycles and /cycle/5 are from before there were
+// teams; they come with team null and land on the first team.
 const listeners = new Set<() => void>();
 const emit = () => listeners.forEach((l) => l());
 window.addEventListener('popstate', emit);
@@ -21,15 +23,18 @@ export function useLocation() {
   );
 }
 
+export type IssueTab = 'all' | 'active' | 'backlog';
 export type Route =
-  | { name: 'issues'; tab: 'all' | 'active' | 'backlog' }
+  | { name: 'issues'; team: string | null; tab: IssueTab }
   | { name: 'issue'; ref: string }
   | { name: 'my'; tab: 'assigned' | 'created' }
   | { name: 'projects' }
   | { name: 'project'; id: number }
-  | { name: 'cycles' }
-  | { name: 'cycle'; number: number }
-  | { name: 'settings'; section: string };
+  | { name: 'cycles'; team: string | null }
+  | { name: 'cycle'; team: string | null; number: number }
+  | { name: 'settings'; section: string; sub: string | null };
+
+const issueTab = (s: string | null | undefined): IssueTab => (s === 'active' || s === 'backlog' ? s : 'all');
 
 export function parseRoute(path: string): Route {
   const [pathname, search] = path.split('?');
@@ -40,12 +45,15 @@ export function parseRoute(path: string): Route {
     case 'my-issues': return { name: 'my', tab: parts[1] === 'created' ? 'created' : 'assigned' };
     case 'projects': return { name: 'projects' };
     case 'project': return { name: 'project', id: Number(parts[1]) };
-    case 'cycles': return { name: 'cycles' };
-    case 'cycle': return { name: 'cycle', number: Number(parts[1]) };
-    case 'settings': return { name: 'settings', section: parts[1] || 'profile' };
-    default: {
-      const tab = q.get('tab') || parts[1];
-      return { name: 'issues', tab: tab === 'active' || tab === 'backlog' ? tab : 'all' };
+    case 'team': {
+      const team = decodeURIComponent(parts[1] || '');
+      if (parts[2] === 'cycles') return { name: 'cycles', team };
+      if (parts[2] === 'cycle') return { name: 'cycle', team, number: Number(parts[3]) };
+      return { name: 'issues', team, tab: issueTab(parts[2]) };
     }
+    case 'cycles': return { name: 'cycles', team: null };
+    case 'cycle': return { name: 'cycle', team: null, number: Number(parts[1]) };
+    case 'settings': return { name: 'settings', section: parts[1] || 'profile', sub: parts[2] ? decodeURIComponent(parts[2]) : null };
+    default: return { name: 'issues', team: null, tab: issueTab(q.get('tab') || parts[1]) };
   }
 }

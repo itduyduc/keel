@@ -11,8 +11,9 @@ import { issuePickers } from './pickers';
 import { assignToMe, confirmDelete, copyBranch, copyId, copyLink } from './actions';
 import { Avatar } from './components/bits';
 import { TeamIcon, Icon, ProjectIcon, CycleIcon } from './icons';
-import { isTyping } from './util';
+import { isTyping, teamByKey, teamPath } from './util';
 import { useToasts } from './toast';
+import type { Team } from './types';
 
 export function App() {
   const s = useApp();
@@ -31,7 +32,12 @@ export function App() {
     );
   }
   const route = parseRoute(loc);
-  if (loc === '/' || loc === '') { navigate('/issues', { replace: true }); return null; }
+  // the old single-team addresses (/issues, /cycles, /cycle/5) land on the first team
+  if ((route.name === 'issues' || route.name === 'cycles' || route.name === 'cycle') && route.team === null) {
+    const first = s.data.teams[0];
+    navigate(route.name === 'issues' ? teamPath(first, route.tab) : route.name === 'cycles' ? `/team/${first.key}/cycles` : `/team/${first.key}/cycle/${route.number}`, { replace: true });
+    return null;
+  }
 
   return (
     <div className="app">
@@ -51,15 +57,18 @@ export function App() {
 }
 
 function View({ route }: { route: Route }) {
+  const d = useApp().data!;
+  const team = 'team' in route ? teamByKey(d, route.team) : undefined;
+  const noTeam = <div className="empty">No team {'team' in route ? route.team : ''}.</div>;
   switch (route.name) {
     case 'issue': return <IssuePage refStr={route.ref} key={route.ref} />;
     case 'my': return <MyIssues tab={route.tab} />;
     case 'projects': return <ProjectsView />;
     case 'project': return <ProjectView id={route.id} key={route.id} />;
-    case 'cycles': return <CyclesView />;
-    case 'cycle': return <CycleView number={route.number} key={route.number} />;
-    case 'settings': return <Settings section={route.section} />;
-    default: return <TeamIssues tab={route.tab} />;
+    case 'cycles': return team ? <CyclesView team={team} key={team.id} /> : noTeam;
+    case 'cycle': return team ? <CycleView team={team} number={route.number} key={`${team.id}-${route.number}`} /> : noTeam;
+    case 'settings': return <Settings section={route.section} sub={route.sub} />;
+    default: return team ? <TeamIssues team={team} tab={route.tab} key={team.id} /> : noTeam;
   }
 }
 
@@ -90,8 +99,8 @@ function Sidebar({ route }: { route: Route }) {
             if (o.key === 'signout') signOut();
           },
         })}>
-          <TeamIcon color={d.team.color} size={18} />
-          <span className="workspace-name">{d.team.name}</span>
+          <TeamIcon color={d.teams[0].color} size={18} />
+          <span className="workspace-name">{d.workspace.name}</span>
           <Icon name="chevronDown" size={12} color="#8a8f98" />
         </button>
         <button className="icon-btn" title="Search (⌘K)" onClick={() => setUi({ palette: true })}><Icon name="search" /></button>
@@ -99,13 +108,12 @@ function Sidebar({ route }: { route: Route }) {
       </div>
       <nav className="nav">
         {item('My issues', <Icon name="user" />, '/my-issues', route.name === 'my', myCount ? <span className="nav-count">{myCount}</span> : null)}
-        <div className="nav-section">Your team</div>
-        <div className="nav-team"><TeamIcon color={d.team.color} size={16} /><span>{d.team.name}</span></div>
-        <div className="nav-indent">
-          {item('Issues', <Icon name="issues" />, '/issues', route.name === 'issues' || route.name === 'issue')}
-          {item('Cycles', <CycleIcon size={16} />, '/cycles', route.name === 'cycles' || route.name === 'cycle')}
-          {item('Projects', <Icon name="projects" />, '/projects', route.name === 'projects')}
+        {item('Projects', <Icon name="projects" />, '/projects', route.name === 'projects')}
+        <div className="nav-section nav-section-row">
+          <span>Teams</span>
+          {d.me.role === 'admin' && <button className="icon-btn nav-add" title="Create a team" onClick={() => navigate('/settings/teams/new')}><Icon name="plus" size={13} /></button>}
         </div>
+        {d.teams.map((t) => <TeamNav key={t.id} team={t} route={route} item={item} />)}
         {d.projects.some((p) => !p.archived) && <div className="nav-section">Projects</div>}
         {d.projects.filter((p) => !p.archived).map((p) => (
           <div key={p.id}>{item(p.name, <ProjectIcon icon={p.icon} color={p.color} />, `/project/${p.id}`, route.name === 'project' && route.id === p.id)}</div>
@@ -118,6 +126,39 @@ function Sidebar({ route }: { route: Route }) {
         <div className="me-row"><Avatar user={d.me} size={20} /><span>{d.me.name}</span></div>
       </div>
     </aside>
+  );
+}
+
+// a team in the sidebar folds away like Linear's; which are folded is this window's to remember
+const FOLDED_KEY = 'keel.nav.folded';
+function TeamNav({ team, route, item }: {
+  team: Team; route: Route; item: (label: string, icon: React.ReactNode, path: string, active: boolean) => React.ReactNode;
+}) {
+  const [folded, setFolded] = useState(() => { try { return (JSON.parse(localStorage.getItem(FOLDED_KEY) || '[]') as string[]).includes(team.key); } catch { return false; } });
+  const toggle = () => {
+    const next = !folded;
+    setFolded(next);
+    try {
+      const all = new Set(JSON.parse(localStorage.getItem(FOLDED_KEY) || '[]') as string[]);
+      if (next) all.add(team.key); else all.delete(team.key);
+      localStorage.setItem(FOLDED_KEY, JSON.stringify([...all]));
+    } catch { /* not remembered; fine */ }
+  };
+  const mine = (key: string | null) => !!key && key.toLowerCase() === team.key.toLowerCase();
+  const onIssue = route.name === 'issue' && mine(route.ref.split('-')[0]);
+  return (
+    <>
+      <button className="nav-team" onClick={toggle}>
+        <TeamIcon color={team.color} size={16} /><span>{team.name}</span>
+        <span className={`nav-caret${folded ? ' closed' : ''}`}><Icon name="chevronDown" size={10} /></span>
+      </button>
+      {!folded && (
+        <div className="nav-indent">
+          {item('Issues', <Icon name="issues" />, teamPath(team), (route.name === 'issues' && mine(route.team)) || onIssue)}
+          {team.cyclesEnabled && item('Cycles', <CycleIcon size={16} />, `/team/${team.key}/cycles`, (route.name === 'cycles' || route.name === 'cycle') && mine(route.team))}
+        </div>
+      )}
+    </>
   );
 }
 

@@ -3,7 +3,7 @@
 // and sort locally, so switching views and searching never wait on the network.
 import { useSyncExternalStore } from 'react';
 import { get, post, patch as patchReq, del, setSignedOutHandler, ApiError } from './api';
-import type { Activity, Bootstrap, Comment, Issue, IssuePatch, Label, Project, Team, User } from './types';
+import type { Activity, Bootstrap, Comment, Issue, IssuePatch, Label, Project, Team, User, Workspace } from './types';
 import { toast } from './toast';
 
 export interface Detail { comments: Comment[]; activity: Activity[]; loaded: boolean }
@@ -102,13 +102,14 @@ function apply(e: any) {
     case 'labels': setData((d) => ({ ...d, labels: e.labels as Label[] })); break;
     case 'projects': setData((d) => ({ ...d, projects: e.projects as Project[] })); break;
     case 'users': setData((d) => ({ ...d, users: e.users as User[], me: (e.users as User[]).find((u) => u.id === d.me.id) || d.me })); break;
-    case 'team': setData((d) => ({ ...d, team: e.team as Team })); break;
+    case 'workspace': setData((d) => ({ ...d, workspace: e.workspace as Workspace })); break;
+    case 'teams': setData((d) => ({ ...d, teams: e.teams as Team[] })); break;
   }
 }
 
 // ── issue detail ───────────────────────────────────────────────────────────
-export async function loadDetail(issueNumber: number) {
-  const r = await get<{ issue: Issue; comments: Comment[]; activity: Activity[] }>(`/api/issues/${issueNumber}`);
+export async function loadDetail(ref: string) {
+  const r = await get<{ issue: Issue; comments: Comment[]; activity: Activity[] }>(`/api/issues/${encodeURIComponent(ref)}`);
   upsertIssue(r.issue);
   set({ detail: { ...state.detail, [r.issue.id]: { comments: r.comments, activity: r.activity, loaded: true } } });
 }
@@ -122,7 +123,7 @@ export async function updateIssue(issue: Issue, change: IssuePatch) {
   const before = state.data?.issues.find((x) => x.id === issue.id);
   upsertIssue({ ...issue, ...change, updatedAt: new Date().toISOString() });
   try {
-    upsertIssue(await patchReq<Issue>(`/api/issues/${issue.number}`, change));
+    upsertIssue(await patchReq<Issue>(`/api/issues/${issue.identifier}`, change));
   } catch (e) {
     if (before) upsertIssue(before);
     fail(e);
@@ -146,13 +147,13 @@ export async function createIssue(input: IssuePatch & { title: string }) {
 export async function deleteIssue(issue: Issue) {
   const before = state.data?.issues;
   setData((d) => ({ ...d, issues: d.issues.filter((x) => x.id !== issue.id) }));
-  try { await del(`/api/issues/${issue.number}`); toast(`Deleted ${issue.identifier}`); }
+  try { await del(`/api/issues/${issue.identifier}`); toast(`Deleted ${issue.identifier}`); }
   catch (e) { if (before) setData((d) => ({ ...d, issues: before })); fail(e); }
 }
 
 export async function addComment(issue: Issue, body: string) {
   try {
-    const c = await post<Comment>(`/api/issues/${issue.number}/comments`, { body });
+    const c = await post<Comment>(`/api/issues/${issue.identifier}/comments`, { body });
     updateDetail(issue.id, (d) => (d.comments.some((x) => x.id === c.id) ? d : { ...d, comments: [...d.comments, c] }));
     return true;
   } catch (e) { fail(e); return false; }
@@ -188,6 +189,15 @@ export async function saveProject(input: { id?: number; name?: string; icon?: st
   try {
     if (input.id) return await patchReq<Project>(`/api/projects/${input.id}`, input);
     return await post<Project>('/api/projects', input);
+  } catch (e) { fail(e); return null; }
+}
+
+// the reply goes straight into state: the event announcing it can arrive after we navigate to it
+export async function saveTeam(input: { key?: string; name?: string; color?: string; cyclesEnabled?: boolean }, existing?: Team) {
+  try {
+    const t = existing ? await patchReq<Team>(`/api/teams/${existing.key}`, input) : await post<Team>('/api/teams', input);
+    setData((d) => ({ ...d, teams: d.teams.some((x) => x.id === t.id) ? d.teams.map((x) => (x.id === t.id ? t : x)) : [...d.teams, t] }));
+    return t;
   } catch (e) { fail(e); return null; }
 }
 

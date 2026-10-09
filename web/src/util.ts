@@ -1,6 +1,6 @@
 import { marked } from 'marked';
 import DOMPurify from 'dompurify';
-import type { Bootstrap, Issue, Status, User } from './types';
+import type { Bootstrap, Issue, Status, Team, User } from './types';
 import { toast } from './toast';
 
 export const PRIORITY_NAMES = ['No priority', 'Urgent', 'High', 'Medium', 'Low'];
@@ -67,12 +67,24 @@ export const issueUrl = (issue: Issue) => `${location.origin}/issue/${issue.iden
 
 export function estimateLabel(data: Bootstrap, value: number | null) {
   if (value === null || value === undefined) return null;
-  const scale = data.team.estimateScales[data.team.estimateScale];
+  const scale = data.workspace.estimateScales[data.workspace.estimateScale];
   if (scale?.names) {
     const i = scale.values.indexOf(value);
     if (i >= 0) return scale.names[i];
   }
   return String(value);
+}
+
+// ── teams ─────────────────────────────────────────────────────────────────
+export const teamOf = (data: Bootstrap, teamId: number | undefined): Team => data.teams.find((t) => t.id === teamId) || data.teams[0];
+export const teamByKey = (data: Bootstrap, key: string | null): Team | undefined =>
+  key ? data.teams.find((t) => t.key.toLowerCase() === key.toLowerCase()) : undefined;
+export const teamPath = (t: Team, tab = 'all') => `/team/${t.key}/${tab}`;
+// matches any team's issue id (PIC-80, ENG-3); keys are letters only, so safe in a pattern
+export const refPattern = (data: Bootstrap) => `(?:${data.teams.map((t) => t.key).join('|')})-\\d+`;
+// a typed key in any case → the issue's real id, if it exists
+export function issueIdIndex(data: Bootstrap) {
+  return new Map(data.issues.map((i) => [i.identifier.toUpperCase(), i.identifier]));
 }
 
 export function initials(name: string) {
@@ -113,9 +125,8 @@ export function renderMarkdown(src: string, data: Bootstrap): string {
   const root = document.createElement('div');
   root.innerHTML = html;
   const handles = new Map(data.users.map((u) => [u.handle.toLowerCase(), u]));
-  const numbers = new Set(data.issues.map((i) => i.number));
-  const key = data.team.key;
-  const re = new RegExp(`(^|[^A-Za-z0-9_.@])(@[A-Za-z0-9._-]+|${key}-\\d+)`, 'g');
+  const ids = issueIdIndex(data);
+  const re = new RegExp(`(^|[^A-Za-z0-9_.@])(@[A-Za-z0-9._-]+|${refPattern(data)})`, 'g');
   const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
   const texts: Text[] = [];
   for (let n = walker.nextNode(); n; n = walker.nextNode()) {
@@ -137,8 +148,8 @@ export function renderMarkdown(src: string, data: Bootstrap): string {
         const u = handles.get(token.slice(1).toLowerCase().replace(/[._-]+$/, ''));
         if (u) { el = document.createElement('span'); el.className = 'mention'; el.textContent = `@${u.name}`; el.title = u.email; }
       } else {
-        const n = Number(token.split('-')[1]);
-        if (numbers.has(n)) { el = document.createElement('a'); el.className = 'issue-ref'; el.setAttribute('href', `/issue/${key}-${n}`); el.textContent = `${key}-${n}`; }
+        const id = ids.get(token.toUpperCase());
+        if (id) { el = document.createElement('a'); el.className = 'issue-ref'; el.setAttribute('href', `/issue/${id}`); el.textContent = id; }
       }
       if (!el) continue;
       frag.append(s.slice(last, start), el);

@@ -71,7 +71,8 @@ function pickValues(key: FilterKey, anchor: Element | null, get: () => Filters, 
   });
 }
 
-export function FilterButton({ filters, setFilters }: { filters: Filters; setFilters: (f: Filters) => void }) {
+// cycles=false leaves Cycle out, for a list whose team doesn't run cycles
+export function FilterButton({ filters, setFilters, cycles = true }: { filters: Filters; setFilters: (f: Filters) => void; cycles?: boolean }) {
   // the menus read the latest filters through a ref-like getter, since they stay open while toggling
   let latest = filters;
   const set = (f: Filters) => { latest = f; setFilters(f); };
@@ -80,7 +81,7 @@ export function FilterButton({ filters, setFilters }: { filters: Filters; setFil
       const el = e.currentTarget;
       openMenu({
         anchor: anchorOf(el), placeholder: 'Filter…', numbered: true,
-        options: () => FIELDS.map((f) => ({ key: f.key, label: f.label, icon: <Icon name={f.icon} color="#9b9b9e" /> })),
+        options: () => FIELDS.filter((f) => cycles || f.key !== 'cycle').map((f) => ({ key: f.key, label: f.label, icon: <Icon name={f.icon} color="#9b9b9e" /> })),
         onSelect: (o) => setTimeout(() => pickValues(o.key as FilterKey, el, () => latest, set), 0),
       });
     }}>

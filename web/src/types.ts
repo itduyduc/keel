@@ -17,7 +17,7 @@ export interface PullRequest {
 }
 
 export interface Issue {
-  id: number; number: number; identifier: string; title: string; description: string;
+  id: number; teamId: number; number: number; identifier: string; title: string; description: string;
   statusId: number; priority: number; assigneeId: number | null; creatorId: number | null; projectId: number | null;
   cycle: number | null; parentId: number | null; estimate: number | null; dueDate: string | null;
   labelIds: number[]; prs: PullRequest[];
@@ -28,12 +28,16 @@ export interface Cycle { number: number; startDate: string; endDate: string; sta
 
 export interface EstimateScale { label: string; values: number[]; names?: string[] }
 
-export interface Team {
-  key: string; name: string; icon: string; color: string;
+// what every team shares
+export interface Workspace {
+  name: string;
   cycle: { anchor: string; tz: string; lengthDays: number };
   estimateScale: string; estimateScales: Record<string, EstimateScale>;
   defaultStatusId: number; prOpenStatusId: number | null; prMergedStatusId: number | null; projectIcons: string[];
 }
+
+// each team owns its key (PIC), its issue numbers, and whether it runs cycles
+export interface Team { id: number; key: string; name: string; color: string; cyclesEnabled: boolean; createdAt: string }
 
 export interface Reaction { emoji: string; userIds: number[] }
 
@@ -47,8 +51,9 @@ export interface Activity {
 }
 
 export interface Bootstrap {
-  version: string; me: User; team: Team; statuses: Status[]; users: User[]; labels: Label[]; projects: Project[];
+  version: string; me: User; workspace: Workspace; teams: Team[]; statuses: Status[]; users: User[]; labels: Label[]; projects: Project[];
   cycles: { current: number; cycles: Cycle[] }; issues: Issue[];
 }
 
-export type IssuePatch = Partial<Pick<Issue, 'title' | 'description' | 'statusId' | 'priority' | 'assigneeId' | 'projectId' | 'cycle' | 'parentId' | 'estimate' | 'dueDate' | 'labelIds'>>;
+// teamId only counts when creating: an issue stays in its team
+export type IssuePatch = Partial<Pick<Issue, 'teamId' | 'title' | 'description' | 'statusId' | 'priority' | 'assigneeId' | 'projectId' | 'cycle' | 'parentId' | 'estimate' | 'dueDate' | 'labelIds'>>;

@@ -9,7 +9,7 @@ import { Avatar, LabelChip, ProjectChip } from '../components/bits';
 import { Markdown } from '../components/Markdown';
 import { RichEditor, type RichEditorHandle } from '../components/RichEditor';
 import { openMenu, anchorOf } from '../components/Menu';
-import { PRIORITY_NAMES, ago, fullTime, dayLabel, isOverdue, isClosed, estimateLabel, cycleSpan, sortIssues } from '../util';
+import { PRIORITY_NAMES, ago, fullTime, dayLabel, isOverdue, isClosed, estimateLabel, cycleSpan, sortIssues, teamOf, teamPath } from '../util';
 import type { Activity, Bootstrap, Comment, Issue } from '../types';
 
 const REACTIONS = ['👍', '👎', '❤️', '🎉', '😄', '👀', '🚀', '🙏'];
@@ -18,20 +18,23 @@ export function IssuePage({ refStr }: { refStr: string }) {
   const { data, detail } = useApp();
   const ui = useUi();
   const d = data!;
-  const number = Number((refStr.match(/(\d+)$/) || [])[1]);
-  const issue = d.issues.find((i) => i.number === number);
+  // PIC-80 in any case; a bare 80 from an old link while only one team has an 80
+  const ref = refStr.toUpperCase();
+  const bare = /^\d+$/.test(ref) ? d.issues.filter((i) => i.number === Number(ref)) : [];
+  const issue = d.issues.find((i) => i.identifier.toUpperCase() === ref) || (bare.length === 1 ? bare[0] : undefined);
   const [missing, setMissing] = useState(false);
 
   useEffect(() => {
     setMissing(false);
-    loadDetail(number).catch(() => setMissing(true));
-  }, [number]);
+    loadDetail(refStr).catch(() => setMissing(true));
+  }, [refStr]);
   useEffect(() => { setUi({ pageIssueId: issue?.id ?? null }); return () => setUi({ pageIssueId: null }); }, [issue?.id]);
 
   if (!issue) {
     return <div className="empty">{missing ? `${refStr} doesn't exist, or was deleted.` : 'Loading…'}</div>;
   }
   const det = detail[issue.id];
+  const team = teamOf(d, issue.teamId);
   const pos = ui.listOrder.indexOf(issue.id);
   const go = (delta: number) => {
     const id = ui.listOrder[pos + delta];
@@ -43,10 +46,10 @@ export function IssuePage({ refStr }: { refStr: string }) {
     <div className="issue-page">
       <header className="topbar">
         <div className="crumbs">
-          <TeamIcon color={d.team.color} size={16} />
-          <span className="crumb" onClick={() => navigate('/issues')}>{d.team.name}</span>
+          <TeamIcon color={team.color} size={16} />
+          <span className="crumb" onClick={() => navigate(teamPath(team))}>{team.name}</span>
           <Icon name="chevronRight" size={12} className="crumb-sep" />
-          <span className="crumb" onClick={() => navigate('/issues')}>Issues</span>
+          <span className="crumb" onClick={() => navigate(teamPath(team))}>Issues</span>
           <Icon name="chevronRight" size={12} className="crumb-sep" />
           <span className="crumb-current"><span className="crumb-id">{issue.identifier}</span> {issue.title}</span>
           <button className="icon-btn" title="More actions" onClick={(e) => { const r = e.currentTarget.getBoundingClientRect(); contextMenu(issue, { clientX: r.left, clientY: r.bottom + 4 }); }}>
@@ -130,7 +133,7 @@ function SubIssues({ issue, data }: { issue: Issue; data: Bootstrap }) {
       <div className="section-head">
         <span>Sub-issues</span>
         {children.length > 0 && <span className="muted">{done}/{children.length}</span>}
-        <button className="icon-btn" title="Add sub-issue" onClick={() => openCreate({ parentId: issue.id, projectId: issue.projectId, cycle: issue.cycle })}>
+        <button className="icon-btn" title="Add sub-issue" onClick={() => openCreate({ teamId: issue.teamId, parentId: issue.id, projectId: issue.projectId, cycle: issue.cycle })}>
           <Icon name="plus" size={14} />
         </button>
       </div>
@@ -293,6 +296,7 @@ function Rail({ issue, data }: { issue: Issue; data: Bootstrap }) {
   const labels = issue.labelIds.map((id) => data.labels.find((l) => l.id === id)).filter(Boolean);
   const parent = issue.parentId ? data.issues.find((i) => i.id === issue.parentId) : undefined;
   const cycle = data.cycles.cycles.find((c) => c.number === issue.cycle);
+  const cyclesOn = teamOf(data, issue.teamId).cyclesEnabled;
   const closed = isClosed(status);
   const prop = (key: keyof typeof issuePickers, icon: React.ReactNode, label: React.ReactNode, empty = false, title?: string) => (
     <button className={`prop${empty ? ' empty' : ''}`} title={title} onClick={(e) => issuePickers[key](issue, e.currentTarget)}>
@@ -324,8 +328,8 @@ function Rail({ issue, data }: { issue: Issue; data: Bootstrap }) {
         {prop('status', <StatusIcon status={status} statuses={data.statuses} />, status?.name, false, 'Change status (S)')}
         {prop('priority', <PriorityIcon priority={issue.priority} />, issue.priority ? PRIORITY_NAMES[issue.priority] : 'Set priority', !issue.priority, 'Set priority (P)')}
         {prop('assignee', <Avatar user={assignee} size={16} />, assignee?.name || 'Assign', !assignee, 'Assign (A)')}
-        {prop('cycle', <CycleIcon progress={cycle?.isCurrent ? cycleProgress(cycle.startsAt, cycle.endsAt) : cycle?.isPast ? 1 : 0} />, issue.cycle !== null ? `Cycle ${issue.cycle}` : 'Add to cycle', issue.cycle === null, cycle ? cycleSpan(cycle.startDate, cycle.endDate) : 'Cycle (⇧C)')}
-        {prop('estimate', <Icon name="estimate" />, issue.estimate !== null ? `${estimateLabel(data, issue.estimate)} ${data.team.estimateScale === 'tshirt' ? '' : 'points'}` : 'Estimate', issue.estimate === null, 'Estimate (⇧E)')}
+        {cyclesOn && prop('cycle', <CycleIcon progress={cycle?.isCurrent ? cycleProgress(cycle.startsAt, cycle.endsAt) : cycle?.isPast ? 1 : 0} />, issue.cycle !== null ? `Cycle ${issue.cycle}` : 'Add to cycle', issue.cycle === null, cycle ? cycleSpan(cycle.startDate, cycle.endDate) : 'Cycle (⇧C)')}
+        {prop('estimate', <Icon name="estimate" />, issue.estimate !== null ? `${estimateLabel(data, issue.estimate)} ${data.workspace.estimateScale === 'tshirt' ? '' : 'points'}` : 'Estimate', issue.estimate === null, 'Estimate (⇧E)')}
         {prop('dueDate', <Icon name="calendar" color={issue.dueDate && isOverdue(issue.dueDate) && !closed ? '#eb5757' : undefined} />,
           issue.dueDate ? <span className={isOverdue(issue.dueDate) && !closed ? 'overdue-text' : ''}>{dayLabel(issue.dueDate)}</span> : 'Due date', !issue.dueDate, 'Due date (⇧D)')}
       </section>

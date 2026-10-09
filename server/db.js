@@ -3,9 +3,10 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { now } from './util.js';
+import { lastMonday } from './cycles.js';
 
 // Each entry runs once, in order; PRAGMA user_version records how far we got.
-const MIGRATIONS = [
+export const MIGRATIONS = [
   `
   CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT);
 
@@ -160,11 +161,70 @@ const MIGRATIONS = [
     PRIMARY KEY (issue_id, pr_id)
   );
   `,
+  // More than one team, like Linear (2026-10-09). A team owns its key and its issue
+  // numbers, so the new table takes the old team out of meta, and issues are rebuilt
+  // because SQLite cannot drop the column-level UNIQUE that made numbers workspace-wide.
+  // The cycle schedule, estimate scale, statuses, labels and projects stay shared.
+  `
+  CREATE TABLE teams (
+    id INTEGER PRIMARY KEY,
+    key TEXT NOT NULL UNIQUE COLLATE NOCASE,
+    name TEXT NOT NULL UNIQUE COLLATE NOCASE,
+    color TEXT NOT NULL,
+    next_issue_number INTEGER NOT NULL DEFAULT 1,
+    cycles_enabled INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL
+  );
+  INSERT INTO teams (id, key, name, color, next_issue_number, cycles_enabled, created_at) VALUES (
+    1,
+    (SELECT value FROM meta WHERE key = 'team_key'),
+    (SELECT value FROM meta WHERE key = 'team_name'),
+    (SELECT value FROM meta WHERE key = 'team_color'),
+    (SELECT CAST(value AS INTEGER) FROM meta WHERE key = 'next_issue_number'),
+    1,
+    strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+  );
+  INSERT INTO meta (key, value) SELECT 'workspace_name', value FROM meta WHERE key = 'team_name';
+  DELETE FROM meta WHERE key IN ('team_key', 'team_name', 'team_icon', 'team_color', 'next_issue_number');
+
+  CREATE TABLE issues_new (
+    id INTEGER PRIMARY KEY,
+    team_id INTEGER NOT NULL REFERENCES teams(id),
+    number INTEGER NOT NULL,
+    title TEXT NOT NULL,
+    description TEXT NOT NULL DEFAULT '',
+    status_id INTEGER NOT NULL REFERENCES statuses(id),
+    priority INTEGER NOT NULL DEFAULT 0 CHECK (priority BETWEEN 0 AND 4),
+    assignee_id INTEGER REFERENCES users(id),
+    creator_id INTEGER REFERENCES users(id),
+    project_id INTEGER REFERENCES projects(id),
+    cycle INTEGER,
+    parent_id INTEGER REFERENCES issues(id),
+    estimate INTEGER,
+    due_date TEXT,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    started_at TEXT,
+    completed_at TEXT,
+    canceled_at TEXT,
+    deleted_at TEXT,
+    UNIQUE (team_id, number)
+  );
+  INSERT INTO issues_new (id, team_id, number, title, description, status_id, priority, assignee_id, creator_id, project_id, cycle,
+                          parent_id, estimate, due_date, created_at, updated_at, started_at, completed_at, canceled_at, deleted_at)
+    SELECT id, 1, number, title, description, status_id, priority, assignee_id, creator_id, project_id, cycle,
+           parent_id, estimate, due_date, created_at, updated_at, started_at, completed_at, canceled_at, deleted_at FROM issues;
+  DROP TABLE issues;
+  ALTER TABLE issues_new RENAME TO issues;
+  CREATE INDEX issues_status ON issues(status_id);
+  CREATE INDEX issues_parent ON issues(parent_id);
+  `,
 ];
 
 // What a fresh database starts with. The team comes from config (KEEL_TEAM_*), read on the
 // first start only; a team that moved here from Linear sets KEEL_FIRST_ISSUE_NUMBER so no
 // number ever means two things, and KEEL_CYCLE_ANCHOR so cycle numbers keep counting.
+// The seed runs with the first migration; the second moves this team out of meta into `teams`.
 const SEED = {
   meta: (team) => ({
     team_key: team.key,
@@ -196,15 +256,6 @@ const SEED = {
   ],
 };
 
-// the Monday of the current week in this zone, as YYYY-MM-DD
-function lastMonday(tz) {
-  const today = new Intl.DateTimeFormat('en-CA', { timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
-  const [y, m, d] = today.split('-').map(Number);
-  const dow = new Date(Date.UTC(y, m - 1, d)).getUTCDay();     // 0 Sunday … 6 Saturday
-  const back = (dow + 6) % 7;
-  return new Date(Date.UTC(y, m - 1, d - back)).toISOString().slice(0, 10);
-}
-
 export function openDb(dataDir, team) {
   fs.mkdirSync(dataDir, { recursive: true });
   const db = new DatabaseSync(path.join(dataDir, 'keel.db'));
@@ -213,14 +264,24 @@ export function openDb(dataDir, team) {
   return db;
 }
 
+// A migration may rebuild a table that others point at. SQLite's recipe for that turns
+// foreign keys off (they cannot change inside a transaction) and checks them before commit.
 function migrate(db, team) {
   const version = db.prepare('PRAGMA user_version').get().user_version;
-  for (let v = version; v < MIGRATIONS.length; v++) {
-    tx(db, () => {
-      db.exec(MIGRATIONS[v]);
-      if (v === 0) seed(db, team);
-      db.exec(`PRAGMA user_version = ${v + 1}`);
-    });
+  if (version >= MIGRATIONS.length) return;
+  db.exec('PRAGMA foreign_keys = OFF');
+  try {
+    for (let v = version; v < MIGRATIONS.length; v++) {
+      tx(db, () => {
+        db.exec(MIGRATIONS[v]);
+        if (v === 0) seed(db, team);
+        const broken = db.prepare('PRAGMA foreign_key_check').all();
+        if (broken.length) throw new Error(`migration ${v + 1} left ${broken.length} broken reference(s), first in ${broken[0].table}`);
+        db.exec(`PRAGMA user_version = ${v + 1}`);
+      });
+    }
+  } finally {
+    db.exec('PRAGMA foreign_keys = ON');
   }
 }
 

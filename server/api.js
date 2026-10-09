@@ -1,7 +1,7 @@
 // JSON API for the app (session cookie) and for scripts (bearer token).
 import { authenticate } from './auth.js';
 import { subscribe, disconnectUser } from './events.js';
-import { HttpError, readBody, parseJson, sendJson, notFound, bad, log } from './util.js';
+import { HttpError, readBody, parseJson, sendJson, bad, log } from './util.js';
 
 export function createApi(store, { github, version }) {
   const routes = [];
@@ -11,22 +11,18 @@ export function createApi(store, { github, version }) {
     routes.push({ method, re, keys, handler });
   };
 
-  const issueNumber = (ref) => {
-    const n = store.parseIdentifier(decodeURIComponent(ref));
-    if (n === null) throw notFound(`No issue ${ref}`);
-    return n;
-  };
+  const issueRef = (ref) => decodeURIComponent(ref);
 
   add('GET', '/api/bootstrap', ({ user }) => store.bootstrap(user));
   add('GET', '/api/me', ({ user }) => store.serializeUser(user));
 
   add('GET', '/api/issues', () => ({ issues: store.listIssues() }));
   add('POST', '/api/issues', ({ actor, body }) => store.createIssue(actor, body));
-  add('GET', '/api/issues/:ref', ({ params }) => store.issueDetail(issueNumber(params.ref)));
-  add('PATCH', '/api/issues/:ref', ({ actor, params, body }) => store.updateIssue(actor, issueNumber(params.ref), body));
-  add('DELETE', '/api/issues/:ref', ({ actor, params }) => store.deleteIssue(actor, issueNumber(params.ref)));
+  add('GET', '/api/issues/:ref', ({ params }) => store.issueDetail(issueRef(params.ref)));
+  add('PATCH', '/api/issues/:ref', ({ actor, params, body }) => store.updateIssue(actor, issueRef(params.ref), body));
+  add('DELETE', '/api/issues/:ref', ({ actor, params }) => store.deleteIssue(actor, issueRef(params.ref)));
 
-  add('POST', '/api/issues/:ref/comments', ({ actor, params, body }) => store.addComment(actor, issueNumber(params.ref), body.body));
+  add('POST', '/api/issues/:ref/comments', ({ actor, params, body }) => store.addComment(actor, issueRef(params.ref), body.body));
   add('PATCH', '/api/comments/:id', ({ actor, params, body }) => store.editComment(actor, params.id, body.body));
   add('DELETE', '/api/comments/:id', ({ actor, params }) => store.deleteComment(actor, params.id));
   add('POST', '/api/comments/:id/reactions', ({ actor, params, body }) => store.toggleReaction(actor, params.id, body.emoji));
@@ -51,7 +47,10 @@ export function createApi(store, { github, version }) {
   add('POST', '/api/tokens', ({ user, body }) => store.createToken(user, body.name));
   add('DELETE', '/api/tokens/:id', ({ user, params }) => ({ tokens: store.revokeToken(user, params.id) }));
 
-  add('PATCH', '/api/team', ({ actor, body }) => store.updateTeam(actor, body));
+  add('GET', '/api/teams', () => ({ teams: store.listTeams() }));
+  add('POST', '/api/teams', ({ actor, body }) => store.createTeam(actor, body));
+  add('PATCH', '/api/teams/:ref', ({ actor, params, body }) => store.updateTeam(actor, decodeURIComponent(params.ref), body));
+  add('PATCH', '/api/workspace', ({ actor, body }) => store.updateWorkspace(actor, body));
   add('GET', '/api/cycles', () => store.cycles());
   add('GET', '/api/github/status', () => github.status());
 

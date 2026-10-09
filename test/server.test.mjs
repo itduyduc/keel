@@ -16,13 +16,15 @@ after(() => env.close());
 
 test('a fresh database is the team from config, Linear-shaped statuses, and no projects', async () => {
   const { body } = await alice.get('/api/bootstrap');
-  assert.equal(body.team.key, 'PIC');
-  assert.equal(body.team.name, 'Acme');
+  assert.deepEqual(body.teams.map((t) => [t.key, t.name, t.cyclesEnabled]), [['PIC', 'Acme', true]]);
+  assert.equal(body.workspace.name, 'Acme');
+  // what a window from before teams reads until it reloads
+  assert.deepEqual([body.team.key, body.team.name, body.team.estimateScale], ['PIC', 'Acme', 'fibonacci']);
   assert.deepEqual(body.statuses.map((s) => s.name), ['Backlog', 'Todo', 'In Progress', 'In Review', 'Done', 'Canceled', 'Duplicate']);
   assert.deepEqual(body.labels.map((l) => l.name).sort(), ['Bug', 'Feature', 'Improvement']);
   assert.deepEqual(body.projects, []);
   assert.equal(body.me.role, 'admin');
-  assert.equal(body.team.estimateScale, 'fibonacci');
+  assert.equal(body.workspace.estimateScale, 'fibonacci');
   await alice.post('/api/projects', { name: 'Biz' });   // the MCP test below files an issue under it
 });
 
@@ -219,9 +221,9 @@ test('GitHub: a PR naming the issue links itself, and status follows it', async 
 
 test('GitHub: numbers from before the move and look-alikes never link', async () => {
   const gh = env.app.github;
-  assert.deepEqual(gh.refsIn('octocat/pic-68-mac-status'), [68]);
+  assert.deepEqual(gh.refsIn('octocat/pic-68-mac-status'), ['PIC-68']);
   assert.deepEqual(gh.refsIn('EPIC-80 and SPIC-81'), []);
-  assert.deepEqual(gh.refsIn('PIC-80, pic-81'), [80, 81]);
+  assert.deepEqual(gh.refsIn('PIC-80, pic-81'), ['PIC-80', 'PIC-81']);
   // PIC-68 predates this database (the team started at 79), so a PR naming it attaches to nothing
   const r = await webhook(env.base, 'pull_request', prPayload({ number: 246, title: 'Mac: green checks', branch: 'octocat/pic-68-mac-status' }));
   assert.equal(r.body.linked, 0);
@@ -247,9 +249,9 @@ test('cycles: unfinished work rolls into the current cycle, finished work stays'
   const open = (await alice.post('/api/issues', { title: 'Unfinished', cycle: cur - 1, statusId: status('Todo') })).body;
   const done = (await alice.post('/api/issues', { title: 'Finished', cycle: cur - 1, statusId: status('Done') })).body;
   store.rollOverCycles();
-  assert.equal(store.getIssue(open.number).cycle, cur);
-  assert.equal(store.getIssue(done.number).cycle, cur - 1);
-  const act = store.issueDetail(open.number).activity.at(-1);
+  assert.equal(store.getIssue(open.identifier).cycle, cur);
+  assert.equal(store.getIssue(done.identifier).cycle, cur - 1);
+  const act = store.issueDetail(open.identifier).activity.at(-1);
   assert.equal(act.kind, 'rolled_over');
   assert.equal(act.actorKind, 'system');
 });

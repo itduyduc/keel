@@ -6,8 +6,8 @@ import { navigate } from '../router';
 import { RichEditor, type RichEditorHandle } from './RichEditor';
 import { Avatar, Kbd, LabelDot } from './bits';
 import { StatusIcon, PriorityIcon, ProjectIcon, CycleIcon, TeamIcon, Icon } from '../icons';
-import { pickStatus, pickPriority, pickAssignee, pickLabels, pickProject, pickCycle, pickEstimate, pickDueDate, pickParent, issuePickers } from '../pickers';
-import { PRIORITY_NAMES, dayLabel, estimateLabel } from '../util';
+import { pickTeam, pickStatus, pickPriority, pickAssignee, pickLabels, pickProject, pickCycle, pickEstimate, pickDueDate, pickParent, issuePickers } from '../pickers';
+import { PRIORITY_NAMES, dayLabel, estimateLabel, teamOf, teamPath } from '../util';
 import { copyBranch, copyId, copyLink, assignToMe, confirmDelete } from '../actions';
 import { toast } from '../toast';
 import type { IssuePatch } from '../types';
@@ -24,7 +24,8 @@ function CreateDialog({ defaults }: { defaults: IssuePatch }) {
   const d = data!;
   const [title, setTitle] = useState('');
   const descRef = useRef<RichEditorHandle>(null);
-  const [p, setP] = useState<IssuePatch>({ statusId: d.team.defaultStatusId, priority: 0, labelIds: [], ...defaults });
+  // the view's team (C on a team's list), else the first team
+  const [p, setP] = useState<IssuePatch>({ teamId: d.teams[0].id, statusId: d.workspace.defaultStatusId, priority: 0, labelIds: [], ...defaults });
   const [more, setMore] = useState(false);
   const [busy, setBusy] = useState(false);
   const titleRef = useRef<HTMLInputElement>(null);
@@ -51,6 +52,9 @@ function CreateDialog({ defaults }: { defaults: IssuePatch }) {
   const project = d.projects.find((x) => x.id === p.projectId);
   const labels = (p.labelIds || []).map((id) => d.labels.find((l) => l.id === id)).filter(Boolean);
   const parent = p.parentId ? d.issues.find((i) => i.id === p.parentId) : undefined;
+  const team = teamOf(d, p.teamId);
+  // a cycle only means something to a team that runs them
+  const setTeam = (id: number) => upd({ teamId: id, ...(teamOf(d, id).cyclesEnabled ? {} : { cycle: null }) });
   const chip = (content: React.ReactNode, onClick: (el: Element) => void, empty = false) => (
     <button className={`prop-chip${empty ? ' empty' : ''}`} onClick={(e) => onClick(e.currentTarget)}>{content}</button>
   );
@@ -64,7 +68,7 @@ function CreateDialog({ defaults }: { defaults: IssuePatch }) {
         if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); submit(); }
       }}>
         <div className="dialog-head">
-          <span className="team-chip"><TeamIcon color={d.team.color} size={14} /> {d.team.key}</span>
+          <button className="team-chip" title="Team" onClick={(e) => pickTeam(team.id, e.currentTarget, setTeam)}><TeamIcon color={team.color} size={14} /> {team.key}</button>
           <Icon name="chevronRight" size={12} className="crumb-sep" />
           <span>{parent ? <>New sub-issue of <span className="muted">{parent.identifier}</span></> : 'New issue'}</span>
           <button className="icon-btn dialog-close" onClick={close}><Icon name="x" size={14} /></button>
@@ -79,7 +83,7 @@ function CreateDialog({ defaults }: { defaults: IssuePatch }) {
           {chip(project ? <><ProjectIcon icon={project.icon} color={project.color} /> {project.name}</> : <><Icon name="projects" /> Project</>, (el) => pickProject(p.projectId ?? null, el, (v) => upd({ projectId: v })), !project)}
           {chip(labels.length ? <>{labels.map((l) => <LabelDot key={l!.id} color={l!.color} />)} {labels.length === 1 ? labels[0]!.name : `${labels.length} labels`}</> : <><Icon name="tag" /> Labels</>,
             (el) => pickLabels(() => latest.current.labelIds || [], el, (v) => upd({ labelIds: v })), !labels.length)}
-          {chip(<><CycleIcon /> {p.cycle ? `Cycle ${p.cycle}` : 'Cycle'}</>, (el) => pickCycle(p.cycle ?? null, el, (v) => upd({ cycle: v })), !p.cycle)}
+          {team.cyclesEnabled && chip(<><CycleIcon /> {p.cycle ? `Cycle ${p.cycle}` : 'Cycle'}</>, (el) => pickCycle(p.cycle ?? null, el, (v) => upd({ cycle: v })), !p.cycle)}
           {chip(<><Icon name="estimate" /> {p.estimate != null ? estimateLabel(d, p.estimate) : 'Estimate'}</>, (el) => pickEstimate(p.estimate ?? null, el, (v) => upd({ estimate: v })), p.estimate == null)}
           {chip(<><Icon name="calendar" /> {p.dueDate ? dayLabel(p.dueDate) : 'Due date'}</>, (el) => pickDueDate(p.dueDate ?? null, el, (v) => upd({ dueDate: v })), !p.dueDate)}
           {chip(<><Icon name="subissue" /> {parent ? parent.identifier : 'Parent'}</>, (el) => pickParent(null, p.parentId ?? null, el, (v) => upd({ parentId: v })), !parent)}
@@ -117,12 +121,17 @@ function Palette() {
     const list: Cmd[] = [
       { key: 'new', label: 'Create new issue', icon: <Icon name="compose" />, hint: 'C', section: 'Commands', run: () => openCreate() },
       go('Go to My issues', '/my-issues', 'user', 'G M'),
-      go('Go to Issues', '/issues', 'issues', 'G I'),
-      go('Go to Active issues', '/issues?tab=active', 'issues'),
-      go('Go to Backlog', '/issues?tab=backlog', 'issues'),
-      go('Go to Cycles', '/cycles', 'cycles', 'G C'),
-      go('Go to current cycle', `/cycle/${d.cycles.current}`, 'cycles'),
+      ...d.teams.flatMap((t, n) => [
+        go(`Go to ${t.name} issues`, teamPath(t), 'issues', n === 0 ? 'G I' : undefined),
+        go(`Go to ${t.name} active issues`, teamPath(t, 'active'), 'issues'),
+        go(`Go to ${t.name} backlog`, teamPath(t, 'backlog'), 'issues'),
+        ...(t.cyclesEnabled ? [
+          go(`Go to ${t.name} cycles`, `/team/${t.key}/cycles`, 'cycles', n === 0 ? 'G C' : undefined),
+          go(`Go to ${t.name} current cycle`, `/team/${t.key}/cycle/${d.cycles.current}`, 'cycles'),
+        ] : []),
+      ]),
       go('Go to Projects', '/projects', 'projects', 'G P'),
+      ...(d.me.role === 'admin' ? [go('Create a team', '/settings/teams/new', 'plus')] : []),
       go('Go to Settings', '/settings', 'settings', 'G S'),
       go('Create an API token for Claude', '/settings/tokens', 'key'),
       { key: 'shortcuts', label: 'Keyboard shortcuts', icon: <Icon name="command" />, hint: '?', section: 'Commands', run: () => setUi({ shortcuts: true }) },
@@ -137,11 +146,11 @@ function Palette() {
         on(ctx.assigneeId === d.me.id ? 'Unassign from me' : 'Assign to me', <Icon name="user" />, () => assignToMe(ctx), 'I'),
         on('Change labels…', <Icon name="tag" />, () => issuePickers.labels(ctx, at), 'L'),
         on('Move to project…', <Icon name="projects" />, () => issuePickers.project(ctx, at), '⇧P'),
-        on('Move to cycle…', <Icon name="cycles" />, () => issuePickers.cycle(ctx, at), '⇧C'),
+        ...(teamOf(d, ctx.teamId).cyclesEnabled ? [on('Move to cycle…', <Icon name="cycles" />, () => issuePickers.cycle(ctx, at), '⇧C')] : []),
         on('Set estimate…', <Icon name="estimate" />, () => issuePickers.estimate(ctx, at), '⇧E'),
         on('Set due date…', <Icon name="calendar" />, () => issuePickers.dueDate(ctx, at), '⇧D'),
         on('Set parent issue…', <Icon name="subissue" />, () => issuePickers.parent(ctx, at)),
-        on('Add sub-issue', <Icon name="plus" />, () => openCreate({ parentId: ctx.id, projectId: ctx.projectId, cycle: ctx.cycle })),
+        on('Add sub-issue', <Icon name="plus" />, () => openCreate({ teamId: ctx.teamId, parentId: ctx.id, projectId: ctx.projectId, cycle: ctx.cycle })),
         on('Copy git branch name', <Icon name="branch" />, () => copyBranch(ctx), '⌘⇧.'),
         on('Copy issue ID', <Icon name="copy" />, () => copyId(ctx), '⌘.'),
         on('Copy issue link', <Icon name="link" />, () => copyLink(ctx), '⌘⇧,'),

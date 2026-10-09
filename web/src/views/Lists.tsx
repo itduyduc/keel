@@ -6,9 +6,10 @@ import { IssueList } from '../components/IssueList';
 import { FilterBar, FilterButton, applyFilters, useFilters } from '../components/Filters';
 import { TeamIcon, CycleIcon, ProjectIcon, Icon } from '../icons';
 import { cycleProgress } from '../pickers';
-import { cycleSpan, isClosed } from '../util';
+import { cycleSpan, isClosed, teamPath } from '../util';
 import { openMenu, anchorOf } from '../components/Menu';
-import type { Issue, IssuePatch } from '../types';
+import type { IssueTab } from '../router';
+import type { Issue, IssuePatch, Team } from '../types';
 
 function ViewHeader({ title, icon, tabs, right }: {
   title: React.ReactNode; icon?: React.ReactNode;
@@ -30,9 +31,9 @@ function ViewHeader({ title, icon, tabs, right }: {
   );
 }
 
-function FilteredList({ viewKey, issues, createDefaults, emptyText, header }: {
+function FilteredList({ viewKey, issues, createDefaults, emptyText, header, cycles = true }: {
   viewKey: string; issues: Issue[]; createDefaults?: IssuePatch; emptyText?: string;
-  header: (filterButton: React.ReactNode) => React.ReactNode;
+  header: (filterButton: React.ReactNode) => React.ReactNode; cycles?: boolean;
 }) {
   const [filters, setFilters] = useFilters(viewKey);
   const shown = useMemo(() => applyFilters(issues, filters), [issues, filters]);
@@ -44,7 +45,7 @@ function FilteredList({ viewKey, issues, createDefaults, emptyText, header }: {
     <>
       {header(
         <>
-          <FilterButton filters={filters} setFilters={setFilters} />
+          <FilterButton filters={filters} setFilters={setFilters} cycles={cycles} />
           <button className="btn ghost small" title="New issue (C)" onClick={() => openCreate(createDefaults)}><Icon name="plus" size={14} /> New issue</button>
         </>,
       )}
@@ -56,29 +57,34 @@ function FilteredList({ viewKey, issues, createDefaults, emptyText, header }: {
   );
 }
 
-export function TeamIssues({ tab }: { tab: 'all' | 'active' | 'backlog' }) {
+export function TeamIssues({ team, tab }: { team: Team; tab: IssueTab }) {
   const { data } = useApp();
   const d = data!;
   const issues = useMemo(() => {
     const type = (i: Issue) => d.statuses.find((s) => s.id === i.statusId)?.type;
-    if (tab === 'active') return d.issues.filter((i) => type(i) === 'started' || type(i) === 'unstarted');
-    if (tab === 'backlog') return d.issues.filter((i) => type(i) === 'backlog');
-    return d.issues;
-  }, [d.issues, d.statuses, tab]);
+    const mine = d.issues.filter((i) => i.teamId === team.id);
+    if (tab === 'active') return mine.filter((i) => type(i) === 'started' || type(i) === 'unstarted');
+    if (tab === 'backlog') return mine.filter((i) => type(i) === 'backlog');
+    return mine;
+  }, [d.issues, d.statuses, tab, team.id]);
+  // the first team keeps the filter keys it had before there were teams
+  const viewKey = team.id === d.teams[0].id ? `issues-${tab}` : `issues-${team.key}-${tab}`;
   return (
     <FilteredList
       key={tab}
-      viewKey={`issues-${tab}`}
+      viewKey={viewKey}
       issues={issues}
+      createDefaults={{ teamId: team.id }}
+      cycles={team.cyclesEnabled}
       emptyText={tab === 'backlog' ? 'The backlog is empty.' : 'No issues yet. Press C to create one.'}
       header={(right) => (
         <ViewHeader
-          icon={<TeamIcon color={d.team.color} size={16} />}
-          title="Issues"
+          icon={<TeamIcon color={team.color} size={16} />}
+          title={team.name}
           tabs={[
-            { key: 'all', label: 'All issues', href: '/issues', active: tab === 'all' },
-            { key: 'active', label: 'Active', href: '/issues?tab=active', active: tab === 'active' },
-            { key: 'backlog', label: 'Backlog', href: '/issues?tab=backlog', active: tab === 'backlog' },
+            { key: 'all', label: 'All issues', href: teamPath(team, 'all'), active: tab === 'all' },
+            { key: 'active', label: 'Active', href: teamPath(team, 'active'), active: tab === 'active' },
+            { key: 'backlog', label: 'Backlog', href: teamPath(team, 'backlog'), active: tab === 'backlog' },
           ]}
           right={right}
         />
@@ -97,6 +103,7 @@ export function MyIssues({ tab }: { tab: 'assigned' | 'created' }) {
       viewKey={`my-${tab}`}
       issues={issues}
       createDefaults={tab === 'assigned' ? { assigneeId: d.me.id } : {}}
+      cycles={d.teams.some((t) => t.cyclesEnabled)}
       emptyText={tab === 'assigned' ? 'Nothing is assigned to you.' : "You haven't created any issues yet."}
       header={(right) => (
         <ViewHeader
@@ -179,6 +186,7 @@ export function ProjectView({ id }: { id: number }) {
       viewKey={`project-${id}`}
       issues={issues}
       createDefaults={{ projectId: id }}
+      cycles={d.teams.some((t) => t.cyclesEnabled)}
       emptyText="No issues in this project yet."
       header={(right) => (
         <ViewHeader
@@ -191,22 +199,31 @@ export function ProjectView({ id }: { id: number }) {
   );
 }
 
-export function CyclesView() {
+function CyclesOff({ team }: { team: Team }) {
+  return (
+    <div className="empty">
+      <p>{team.name} doesn't run cycles.</p>
+      <button className="btn ghost small" onClick={() => navigate(`/settings/teams/${team.key}`)}>Team settings</button>
+    </div>
+  );
+}
+
+export function CyclesView({ team }: { team: Team }) {
   const { data } = useApp();
   const d = data!;
   const cycles = [...d.cycles.cycles].sort((a, b) => b.number - a.number);
   return (
     <>
-      <ViewHeader icon={<Icon name="cycles" size={16} color="#9b9b9e" />} title="Cycles" />
+      <ViewHeader icon={<TeamIcon color={team.color} size={16} />} title={<>{team.name}<Icon name="chevronRight" size={12} className="crumb-sep" />Cycles</>} />
       <div className="main-scroll">
-        <div className="table-list">
+        {!team.cyclesEnabled ? <CyclesOff team={team} /> : <div className="table-list">
           <div className="table-head"><span>Cycle</span><span>Issues</span><span>Progress</span></div>
           {cycles.map((c) => {
-            const list = d.issues.filter((i) => i.cycle === c.number);
+            const list = d.issues.filter((i) => i.teamId === team.id && i.cycle === c.number);
             const pr = progressOf(list, d.statuses);
             const points = list.reduce((n, i) => n + (i.estimate || 0), 0);
             return (
-              <div key={c.number} className={`table-row${c.isCurrent ? ' current' : ''}`} onClick={() => navigate(`/cycle/${c.number}`)}>
+              <div key={c.number} className={`table-row${c.isCurrent ? ' current' : ''}`} onClick={() => navigate(`/team/${team.key}/cycle/${c.number}`)}>
                 <span className="table-name">
                   <CycleIcon progress={c.isCurrent ? cycleProgress(c.startsAt, c.endsAt) : c.isPast ? 1 : 0} />
                   Cycle {c.number}
@@ -218,28 +235,29 @@ export function CyclesView() {
               </div>
             );
           })}
-        </div>
+        </div>}
       </div>
     </>
   );
 }
 
-export function CycleView({ number }: { number: number }) {
+export function CycleView({ team, number }: { team: Team; number: number }) {
   const { data } = useApp();
   const d = data!;
   const cycle = d.cycles.cycles.find((c) => c.number === number);
-  const issues = useMemo(() => d.issues.filter((i) => i.cycle === number), [d.issues, number]);
+  const issues = useMemo(() => d.issues.filter((i) => i.teamId === team.id && i.cycle === number), [d.issues, number, team.id]);
   const pr = progressOf(issues, d.statuses);
+  if (!team.cyclesEnabled) return <CyclesOff team={team} />;
   return (
     <FilteredList
-      viewKey={`cycle-${number}`}
+      viewKey={team.id === d.teams[0].id ? `cycle-${number}` : `cycle-${team.key}-${number}`}
       issues={issues}
-      createDefaults={{ cycle: number }}
+      createDefaults={{ teamId: team.id, cycle: number }}
       emptyText="Nothing in this cycle yet."
       header={(right) => (
         <ViewHeader
           icon={<CycleIcon progress={cycle?.isCurrent ? cycleProgress(cycle.startsAt, cycle.endsAt) : cycle?.isPast ? 1 : 0} />}
-          title={<><span className="crumb" onClick={() => navigate('/cycles')}>Cycles</span><Icon name="chevronRight" size={12} className="crumb-sep" />Cycle {number}
+          title={<><span className="crumb" onClick={() => navigate(`/team/${team.key}/cycles`)}>{team.name} Cycles</span><Icon name="chevronRight" size={12} className="crumb-sep" />Cycle {number}
             {cycle && <span className="muted small header-stat">{cycleSpan(cycle.startDate, cycle.endDate)} · {pr.done}/{pr.total} done</span>}</>}
           right={right}
         />

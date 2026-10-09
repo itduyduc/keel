@@ -1,6 +1,6 @@
 // GitHub pull requests on issues.
 //
-// A PR whose branch or title names PIC-### attaches itself to that issue. Its state
+// A PR whose branch or title names an issue (PIC-123, any team's key) attaches itself to it. Its state
 // then drives the issue: opened (not draft) → In Review, and once every linked PR is
 // merged or closed with at least one merged → Done. Nothing moves an issue out of a
 // completed or canceled status, and a draft or an unmerged close moves nothing.
@@ -23,9 +23,11 @@ export function createGithub(store, cfg) {
   };
   const github = { kind: 'github' };
 
+  // the issue ids a branch or title names, e.g. "PIC-80"; keys are letters only, safe in a pattern
   function refsIn(text) {
-    const re = new RegExp(`(?:^|[^A-Za-z0-9])${store.team().key}-(\\d+)(?![0-9])`, 'gi');
-    return [...String(text || '').matchAll(re)].map((m) => Number(m[1]));
+    const keys = store.listTeams().map((t) => t.key).join('|');
+    const re = new RegExp(`(?:^|[^A-Za-z0-9])(${keys})-(\\d+)(?![0-9])`, 'gi');
+    return [...String(text || '').matchAll(re)].map((m) => `${m[1].toUpperCase()}-${m[2]}`);
   }
 
   function normalize(pr, repo) {
@@ -46,7 +48,7 @@ export function createGithub(store, cfg) {
   }
 
   function automate(issueId) {
-    const t = store.team();
+    const t = store.workspace();
     const issue = store.getIssueById(issueId);
     if (!issue) return;
     const status = store.statusById(issue.statusId);
@@ -56,14 +58,14 @@ export function createGithub(store, cfg) {
     const anyReady = prs.some((p) => p.state === 'open' && !p.draft);
     const anyMerged = prs.some((p) => p.state === 'merged');
     if (anyMerged && !anyOpen && t.prMergedStatusId) {
-      store.updateIssue(github, issue.number, { statusId: t.prMergedStatusId });
+      store.updateIssue(github, issue.identifier, { statusId: t.prMergedStatusId });
       return;
     }
     if (anyReady && t.prOpenStatusId && issue.statusId !== t.prOpenStatusId) {
       const target = store.statusById(t.prOpenStatusId);
       // only ever forward: past In Review already means someone put it there on purpose
       const behind = status.type !== 'started' || status.position < target.position;
-      if (behind) store.updateIssue(github, issue.number, { statusId: t.prOpenStatusId });
+      if (behind) store.updateIssue(github, issue.identifier, { statusId: t.prOpenStatusId });
     }
   }
 
@@ -71,8 +73,8 @@ export function createGithub(store, cfg) {
     const { pr, previous } = store.upsertPullRequest(p);
     const linked = new Set(store.issueIdsForPr(pr.id));
     const newlyLinked = new Set();
-    for (const n of new Set([...refsIn(p.branch), ...refsIn(p.title)])) {
-      const issue = store.getIssue(n);
+    for (const ref of new Set([...refsIn(p.branch), ...refsIn(p.title)])) {
+      const issue = store.getIssue(ref);
       if (issue && store.linkPullRequest(issue.id, pr)) { linked.add(issue.id); newlyLinked.add(issue.id); }
     }
     const stateChanged = previous && (previous.state !== pr.state || previous.draft !== pr.draft);
