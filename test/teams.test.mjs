@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
-import { boot, signIn, webhook, prPayload, callTool, mcp, ADMIN } from './helpers.mjs';
+import { boot, signIn, webhook, prPayload, callTool, mcp, ADMIN, SYSTEM } from './helpers.mjs';
 import { MIGRATIONS, openDb } from '../server/db.js';
 
 let env, alice, bob, eng;
@@ -68,10 +68,10 @@ test('cycles: off refuses a cycle, on takes one, and only teams that run cycles 
   const late = (await alice.post('/api/issues', { title: 'Late', teamId: eng.id, cycle: cur - 1 })).body;
   await alice.patch('/api/teams/ENG', { cyclesEnabled: false });
   store.rollOverCycles();
-  assert.equal(store.getIssue(late.identifier).cycle, cur - 1, 'cycles off: left where it was');
+  assert.equal(store.getIssue(late.identifier, SYSTEM).cycle, cur - 1, 'cycles off: left where it was');
   await alice.patch('/api/teams/ENG', { cyclesEnabled: true });
   store.rollOverCycles();
-  assert.equal(store.getIssue(late.identifier).cycle, cur);
+  assert.equal(store.getIssue(late.identifier, SYSTEM).cycle, cur);
 });
 
 test('GitHub links a PR to whichever team its id names', async () => {

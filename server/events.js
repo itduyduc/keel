@@ -1,5 +1,5 @@
 // Live updates: every signed-in window holds one Server-Sent Events stream, and
-// every change anyone makes is pushed down all of them. A window that drops the
+// every change anyone makes is pushed down all of them that may see it. A window that drops the
 // stream re-fetches everything when it reconnects, so a missed event costs nothing.
 const clients = new Set();
 
@@ -19,9 +19,20 @@ export function subscribe(req, res, user, version) {
   res.on('error', drop);
 }
 
-export function broadcast(event) {
-  const line = `data: ${JSON.stringify(event)}\n\n`;
+// `forUser`, when given, decides per person: it returns the event that user gets, or
+// null to skip them, so a private team's issues reach only the people who can see it.
+export function broadcast(event, forUser = null) {
+  const lines = new Map(); // user id → line, worked out once per person
+  const lineFor = (userId) => {
+    if (!lines.has(userId)) {
+      const e = forUser ? forUser(userId) : event;
+      lines.set(userId, e ? `data: ${JSON.stringify(e)}\n\n` : null);
+    }
+    return lines.get(userId);
+  };
   for (const c of clients) {
+    const line = lineFor(c.userId);
+    if (!line) continue;
     try { c.res.write(line); } catch { clients.delete(c); }
   }
 }

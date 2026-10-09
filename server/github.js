@@ -25,7 +25,7 @@ export function createGithub(store, cfg) {
 
   // the issue ids a branch or title names, e.g. "PIC-80"; keys are letters only, safe in a pattern
   function refsIn(text) {
-    const keys = store.listTeams().map((t) => t.key).join('|');
+    const keys = store.teamKeys().join('|');
     const re = new RegExp(`(?:^|[^A-Za-z0-9])(${keys})-(\\d+)(?![0-9])`, 'gi');
     return [...String(text || '').matchAll(re)].map((m) => `${m[1].toUpperCase()}-${m[2]}`);
   }
@@ -74,7 +74,7 @@ export function createGithub(store, cfg) {
     const linked = new Set(store.issueIdsForPr(pr.id));
     const newlyLinked = new Set();
     for (const ref of new Set([...refsIn(p.branch), ...refsIn(p.title)])) {
-      const issue = store.getIssue(ref);
+      const issue = store.getIssue(ref, github);
       if (issue && store.linkPullRequest(issue.id, pr)) { linked.add(issue.id); newlyLinked.add(issue.id); }
     }
     const stateChanged = previous && (previous.state !== pr.state || previous.draft !== pr.draft);

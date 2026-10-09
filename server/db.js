@@ -219,6 +219,17 @@ export const MIGRATIONS = [
   CREATE INDEX issues_status ON issues(status_id);
   CREATE INDEX issues_parent ON issues(parent_id);
   `,
+  // Private teams, like Linear's (2026-10-09): only members see a private team's issues.
+  // An open team ignores its member list.
+  `
+  ALTER TABLE teams ADD COLUMN private INTEGER NOT NULL DEFAULT 0;
+  CREATE TABLE team_members (
+    team_id INTEGER NOT NULL REFERENCES teams(id),
+    user_id INTEGER NOT NULL REFERENCES users(id),
+    added_at TEXT NOT NULL,
+    PRIMARY KEY (team_id, user_id)
+  );
+  `,
 ];
 
 // What a fresh database starts with. The team comes from config (KEEL_TEAM_*), read on the

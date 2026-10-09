@@ -6,7 +6,7 @@ import { StatusIcon, PriorityIcon, CycleIcon, ProjectIcon, TeamIcon, Icon } from
 import { Avatar, LabelDot } from './components/bits';
 import { PRIORITY_NAMES, PRIORITY_ORDER, cycleSpan, dayLabel, estimateLabel, teamOf, todayString } from './util';
 import { toast } from './toast';
-import type { Issue, IssuePatch } from './types';
+import type { Issue, IssuePatch, Team } from './types';
 
 type Anchor = Element | RectLike | null | undefined;
 const data = () => getState().data!;
@@ -35,12 +35,13 @@ export function pickPriority(value: number, anchor: Anchor, onChange: (p: number
   });
 }
 
-export function pickAssignee(value: number | null, anchor: Anchor, onChange: (id: number | null) => void) {
+// a private team's issues go only to its members
+export function pickAssignee(value: number | null, anchor: Anchor, onChange: (id: number | null) => void, team?: Team) {
   openMenu({
     anchor: anchorOf(anchor), placeholder: 'Assign to…', numbered: true,
     options: () => {
       const me = data().me;
-      const users = data().users.filter((u) => u.active).sort((a, b) => (a.id === me.id ? -1 : b.id === me.id ? 1 : a.name.localeCompare(b.name)));
+      const users = data().users.filter((u) => u.active && (!team?.private || team.memberIds.includes(u.id))).sort((a, b) => (a.id === me.id ? -1 : b.id === me.id ? 1 : a.name.localeCompare(b.name)));
       return [
         { key: 'none', label: 'No assignee', icon: <Avatar user={null} size={16} />, selected: value === null },
         ...users.map((u) => ({ key: String(u.id), label: u.id === me.id ? `${u.name} (you)` : u.name, keywords: `${u.email} ${u.handle}`, icon: <Avatar user={u} size={16} />, selected: u.id === value })),
@@ -185,7 +186,7 @@ export function pickParent(issue: Issue | null, value: number | null, anchor: An
 export const issuePickers = {
   status: (i: Issue, a: Anchor) => pickStatus(i.statusId, a, (v) => updateIssue(i, { statusId: v })),
   priority: (i: Issue, a: Anchor) => pickPriority(i.priority, a, (v) => updateIssue(i, { priority: v })),
-  assignee: (i: Issue, a: Anchor) => pickAssignee(i.assigneeId, a, (v) => updateIssue(i, { assigneeId: v })),
+  assignee: (i: Issue, a: Anchor) => pickAssignee(i.assigneeId, a, (v) => updateIssue(i, { assigneeId: v }), teamOf(data(), i.teamId)),
   labels: (i: Issue, a: Anchor) => pickLabels(() => currentIssue(i).labelIds, a, (v) => updateIssue(currentIssue(i), { labelIds: v })),
   project: (i: Issue, a: Anchor) => pickProject(i.projectId, a, (v) => updateIssue(i, { projectId: v })),
   cycle: (i: Issue, a: Anchor) => {

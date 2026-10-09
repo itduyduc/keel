@@ -8,6 +8,8 @@ export const ADMIN = 'alice@test.dev';
 // a team that moved here from another tracker: keeps its key and counts on from 79
 export const TEAM = { name: 'Acme', key: 'PIC', firstIssueNumber: 79, cycleAnchor: '2026-08-31', tz: 'America/Los_Angeles' };
 export const WEBHOOK_SECRET = 'test-webhook-secret';
+// reading the store directly, as GitHub and the cycle rollover do: every team
+export const SYSTEM = { kind: 'system' };
 
 export async function boot({ web = false } = {}) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'keel-test-'));

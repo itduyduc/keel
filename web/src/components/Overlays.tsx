@@ -15,7 +15,7 @@ import type { IssuePatch } from '../types';
 export function CreateIssue() {
   const { data } = useApp();
   const ui = useUi();
-  if (!ui.create || !data) return null;
+  if (!ui.create || !data?.teams.length) return null;
   return <CreateDialog key={JSON.stringify(ui.create)} defaults={ui.create} />;
 }
 
@@ -53,8 +53,11 @@ function CreateDialog({ defaults }: { defaults: IssuePatch }) {
   const labels = (p.labelIds || []).map((id) => d.labels.find((l) => l.id === id)).filter(Boolean);
   const parent = p.parentId ? d.issues.find((i) => i.id === p.parentId) : undefined;
   const team = teamOf(d, p.teamId);
-  // a cycle only means something to a team that runs them
-  const setTeam = (id: number) => upd({ teamId: id, ...(teamOf(d, id).cyclesEnabled ? {} : { cycle: null }) });
+  // a cycle only means something to a team that runs them, and a private team's issues go to its members
+  const setTeam = (id: number) => {
+    const t = teamOf(d, id);
+    upd({ teamId: id, ...(t.cyclesEnabled ? {} : { cycle: null }), ...(t.private && p.assigneeId && !t.memberIds.includes(p.assigneeId) ? { assigneeId: null } : {}) });
+  };
   const chip = (content: React.ReactNode, onClick: (el: Element) => void, empty = false) => (
     <button className={`prop-chip${empty ? ' empty' : ''}`} onClick={(e) => onClick(e.currentTarget)}>{content}</button>
   );
@@ -79,7 +82,7 @@ function CreateDialog({ defaults }: { defaults: IssuePatch }) {
         <div className="prop-chips">
           {chip(<><StatusIcon status={status} statuses={d.statuses} /> {status?.name}</>, (el) => pickStatus(p.statusId!, el, (v) => upd({ statusId: v })))}
           {chip(<><PriorityIcon priority={p.priority || 0} /> {p.priority ? PRIORITY_NAMES[p.priority] : 'Priority'}</>, (el) => pickPriority(p.priority || 0, el, (v) => upd({ priority: v })), !p.priority)}
-          {chip(<><Avatar user={assignee} size={16} /> {assignee?.name || 'Assignee'}</>, (el) => pickAssignee(p.assigneeId ?? null, el, (v) => upd({ assigneeId: v })), !assignee)}
+          {chip(<><Avatar user={assignee} size={16} /> {assignee?.name || 'Assignee'}</>, (el) => pickAssignee(p.assigneeId ?? null, el, (v) => upd({ assigneeId: v }), team), !assignee)}
           {chip(project ? <><ProjectIcon icon={project.icon} color={project.color} /> {project.name}</> : <><Icon name="projects" /> Project</>, (el) => pickProject(p.projectId ?? null, el, (v) => upd({ projectId: v })), !project)}
           {chip(labels.length ? <>{labels.map((l) => <LabelDot key={l!.id} color={l!.color} />)} {labels.length === 1 ? labels[0]!.name : `${labels.length} labels`}</> : <><Icon name="tag" /> Labels</>,
             (el) => pickLabels(() => latest.current.labelIds || [], el, (v) => upd({ labelIds: v })), !labels.length)}

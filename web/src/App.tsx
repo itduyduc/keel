@@ -33,7 +33,7 @@ export function App() {
   }
   const route = parseRoute(loc);
   // the old single-team addresses (/issues, /cycles, /cycle/5) land on the first team
-  if ((route.name === 'issues' || route.name === 'cycles' || route.name === 'cycle') && route.team === null) {
+  if ((route.name === 'issues' || route.name === 'cycles' || route.name === 'cycle') && route.team === null && s.data.teams.length) {
     const first = s.data.teams[0];
     navigate(route.name === 'issues' ? teamPath(first, route.tab) : route.name === 'cycles' ? `/team/${first.key}/cycles` : `/team/${first.key}/cycle/${route.number}`, { replace: true });
     return null;
@@ -59,7 +59,9 @@ export function App() {
 function View({ route }: { route: Route }) {
   const d = useApp().data!;
   const team = 'team' in route ? teamByKey(d, route.team) : undefined;
-  const noTeam = <div className="empty">No team {'team' in route ? route.team : ''}.</div>;
+  const noTeam = d.teams.length
+    ? <div className="empty">No team {'team' in route ? route.team : ''}.</div>
+    : <div className="empty">You're not in a team yet. An admin can add you in Settings ▸ Teams.</div>;
   switch (route.name) {
     case 'issue': return <IssuePage refStr={route.ref} key={route.ref} />;
     case 'my': return <MyIssues tab={route.tab} />;
@@ -99,7 +101,7 @@ function Sidebar({ route }: { route: Route }) {
             if (o.key === 'signout') signOut();
           },
         })}>
-          <TeamIcon color={d.teams[0].color} size={18} />
+          <TeamIcon color={d.teams[0]?.color} size={18} />
           <span className="workspace-name">{d.workspace.name}</span>
           <Icon name="chevronDown" size={12} color="#8a8f98" />
         </button>

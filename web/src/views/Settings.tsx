@@ -3,7 +3,7 @@ import { useApp, saveLabel, saveProject, saveTeam, signOut } from '../state';
 import { get, post, patch, del } from '../api';
 import { navigate } from '../router';
 import { toast } from '../toast';
-import { copy, teamByKey, teamPath } from '../util';
+import { copy, teamPath } from '../util';
 import { Avatar, LabelDot } from '../components/bits';
 import { Icon, ProjectIcon, TeamIcon, PROJECT_ICON_NAMES } from '../icons';
 import { openMenu, anchorOf } from '../components/Menu';
@@ -70,7 +70,7 @@ function Profile() {
       <div className="profile-card"><Avatar user={me} size={40} /><div><div>{me.name}</div><div className="muted small">{me.email} · {me.role}</div></div></div>
       <Field label="Name"><input value={name} onChange={(e) => setName(e.target.value)} /></Field>
       <Field label="Mention handle" hint={<>Teammates mention you as <code>@{handle}</code>.</>}><input value={handle} onChange={(e) => setHandle(e.target.value)} /></Field>
-      <Field label="Git branch prefix" hint={<>Branch names look like <code>{gitHandle}/{data!.teams[0].key.toLowerCase()}-80-short-title</code>.</>}><input value={gitHandle} onChange={(e) => setGitHandle(e.target.value)} /></Field>
+      <Field label="Git branch prefix" hint={<>Branch names look like <code>{gitHandle}/{(data!.teams[0]?.key ?? 'eng').toLowerCase()}-80-short-title</code>.</>}><input value={gitHandle} onChange={(e) => setGitHandle(e.target.value)} /></Field>
       <div className="row-gap"><button className="btn primary" onClick={save}>Save</button><button className="btn ghost" onClick={() => signOut()}><Icon name="logout" size={14} /> Sign out</button></div>
     </div>
   );
@@ -231,7 +231,7 @@ function GitHub() {
   const { data } = useApp();
   const [s, setS] = useState<GhStatus | null>(null);
   useEffect(() => { get<GhStatus>('/api/github/status').then(setS).catch(() => {}); }, []);
-  const key = data!.teams[0].key;
+  const key = data!.teams[0]?.key ?? 'ENG';
   return (
     <div className="settings-section">
       <h2>GitHub</h2>
@@ -273,24 +273,39 @@ function WorkspaceSettings() {
 }
 
 // ── teams ──────────────────────────────────────────────────────────────────
+// An admin's list also holds the private teams they are not in, which the sidebar never shows.
+function useSettingsTeams(): [Team[], () => void] {
+  const { data } = useApp();
+  const d = data!;
+  const admin = d.me.role === 'admin';
+  const [all, setAll] = useState<Team[] | null>(null);
+  const reload = () => { if (admin) get<{ teams: Team[] }>('/api/teams').then((r) => setAll(r.teams)).catch(() => {}); };
+  useEffect(reload, [d.teams, admin]);
+  return [admin && all ? all : d.teams, reload];
+}
+
+const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
+const accessLabel = (t: Team) => (t.private ? `Private · ${plural(t.memberIds.length, 'member')}` : 'Everyone');
+
 function TeamsSection({ sub }: { sub: string | null }) {
   const { data } = useApp();
   const d = data!;
+  const [teams, reload] = useSettingsTeams();
   if (sub === 'new') return <CreateTeam />;
-  const team = teamByKey(d, sub);
+  const team = sub ? teams.find((t) => t.key.toLowerCase() === sub.toLowerCase()) : undefined;
   if (sub && !team) return <div className="settings-section"><h2>No team {sub}</h2></div>;
-  if (team) return <TeamSettings team={team} key={team.id} />;
+  if (team) return <TeamSettings team={team} reload={reload} key={team.id} />;
   return (
     <div className="settings-section">
       <h2>Teams</h2>
-      <p className="muted">Each team has its own issue ids and numbering, and decides whether it runs cycles.</p>
+      <p className="muted">Each team has its own issue ids and numbering, decides whether it runs cycles, and is open to everyone or private to its members.</p>
       {d.me.role === 'admin' && <button className="btn primary small" onClick={() => navigate('/settings/teams/new')}><Icon name="plus" size={14} /> Create team</button>}
       <div className="table-list">
-        {d.teams.map((t) => (
+        {teams.map((t) => (
           <div key={t.id} className="table-row" onClick={() => navigate(`/settings/teams/${t.key}`)}>
             <span className="table-name"><TeamIcon color={t.color} size={16} /> {t.name} <span className="muted small">{t.key}</span></span>
-            <span className="muted small">{d.issues.filter((i) => i.teamId === t.id).length} issues</span>
-            <span className="muted small">{t.cyclesEnabled ? 'Cycles' : 'No cycles'}</span>
+            <span className="muted small">{t.canSee ? plural(d.issues.filter((i) => i.teamId === t.id).length, 'issue') : "You're not in it"}</span>
+            <span className="muted small">{accessLabel(t)}</span>
           </div>
         ))}
       </div>
@@ -320,13 +335,14 @@ function CreateTeam() {
   const [name, setName] = useState('');
   const [typedKey, setTypedKey] = useState<string | null>(null);
   const [color, setColor] = useState(() => unusedColor(d));
+  const [priv, setPriv] = useState(false);
   const [busy, setBusy] = useState(false);
   const key = typedKey ?? suggestKey(name);
   if (d.me.role !== 'admin') return <div className="settings-section"><h2>Create a team</h2><p className="muted">Only admins can create teams.</p></div>;
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     setBusy(true);
-    const t = await saveTeam({ name, key, color });
+    const t = await saveTeam({ name, key, color, private: priv });
     setBusy(false);
     if (t) { toast(`Created ${t.name}`); navigate(teamPath(t)); }
   };
@@ -339,6 +355,10 @@ function CreateTeam() {
         <input value={key} onChange={(e) => setTypedKey(e.target.value.toUpperCase().replace(/[^A-Z]/g, '').slice(0, 5))} placeholder="ENG" />
       </Field>
       <div className="field"><span className="field-label">Color</span><ColorRow value={color} onPick={setColor} /></div>
+      <div className="field">
+        <label className="toggle"><input type="checkbox" checked={priv} onChange={(e) => setPriv(e.target.checked)} /> Private</label>
+        <span className="field-hint">Only you, until you add people in the team's settings. Everyone else won't see it exists.</span>
+      </div>
       <div className="row-gap">
         <button className="btn primary" type="submit" disabled={busy || !name.trim() || !key}>Create team</button>
         <button className="btn ghost" type="button" onClick={() => navigate('/settings/teams')}>Cancel</button>
@@ -347,18 +367,25 @@ function CreateTeam() {
   );
 }
 
-function TeamSettings({ team }: { team: Team }) {
+type TeamPatch = { name?: string; color?: string; cyclesEnabled?: boolean; private?: boolean; memberIds?: number[] };
+
+function TeamSettings({ team, reload }: { team: Team; reload: () => void }) {
   const { data } = useApp();
   const d = data!;
   const admin = d.me.role === 'admin';
   const [name, setName] = useState(team.name);
-  const save = async (patch: { name?: string; color?: string; cyclesEnabled?: boolean }) => { if (await saveTeam(patch, team)) toast('Team saved'); };
+  const save = async (patch: TeamPatch) => { if (await saveTeam(patch, team)) { toast('Team saved'); reload(); } };
+  const people = d.users.filter((u) => u.active);
+  const toggleMember = (id: number, on: boolean) => {
+    if (!on && id === d.me.id && !confirm(`Leave ${team.name}? You'll stop seeing its issues. As an admin you can add yourself back here.`)) return;
+    save({ memberIds: on ? [...team.memberIds, id] : team.memberIds.filter((x) => x !== id) });
+  };
   return (
     <div className="settings-section">
       <h2><span className="crumb" onClick={() => navigate('/settings/teams')}>Teams</span> <Icon name="chevronRight" size={12} className="crumb-sep" /> {team.name}</h2>
       <div className="kv">
         <span>Identifier</span><span><code>{team.key}</code> · issues are {team.key}-1, {team.key}-2, … It cannot change.</span>
-        <span>Issues</span><span>{d.issues.filter((i) => i.teamId === team.id).length}</span>
+        <span>Issues</span><span>{team.canSee ? d.issues.filter((i) => i.teamId === team.id).length : "You're not in this team, so you can't see its issues."}</span>
       </div>
       <form className="field" onSubmit={(e) => { e.preventDefault(); if (name.trim() && name !== team.name) save({ name }); }}>
         <span className="field-label">Name</span>
@@ -371,6 +398,24 @@ function TeamSettings({ team }: { team: Team }) {
       <div className="field">
         <label className="toggle"><input type="checkbox" checked={team.cyclesEnabled} disabled={!admin} onChange={(e) => save({ cyclesEnabled: e.target.checked })} /> Cycles</label>
         <span className="field-hint">Weekly, from Monday 00:00 ({d.workspace.cycle.tz}), the same weeks as every team that runs them. Unfinished issues roll into the next cycle.</span>
+      </div>
+      <div className="field access">
+        <span className="field-label">Who can access {team.name}</span>
+        <label className="toggle"><input type="radio" name="access" checked={!team.private} disabled={!admin} onChange={() => save({ private: false })} /> Everyone in {d.workspace.name}</label>
+        <label className="toggle"><input type="radio" name="access" checked={team.private} disabled={!admin} onChange={() => save({ private: true })} /> Only the people ticked below</label>
+        {team.private && (
+          <div className="member-list">
+            {people.map((u) => (
+              <label key={u.id} className="member-row">
+                <input type="checkbox" checked={team.memberIds.includes(u.id)} disabled={!admin} onChange={(e) => toggleMember(u.id, e.target.checked)} />
+                <Avatar user={u} size={20} /> <span>{u.name}{u.id === d.me.id ? ' (you)' : ''}</span> <span className="muted small">{u.email}</span>
+              </label>
+            ))}
+          </div>
+        )}
+        <span className="field-hint">{team.private
+          ? "Only the people ticked see this team and its issues; everyone else won't see it exists. Unticking someone takes them off its issues."
+          : 'Everyone who can sign in sees this team and its issues.'}</span>
       </div>
       {!admin && <p className="muted small">Only admins can change a team.</p>}
     </div>

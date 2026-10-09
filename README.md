@@ -20,6 +20,7 @@ Nothing ships with it: the database is created empty on the first start, and not
 
 - Issues with status, priority, assignee, labels, project, estimate, parent, weekly cycles.
 - Teams, like Linear's: each has its own issue prefix and numbering (`ENG-1`, `DES-1`) and turns cycles on or off. Statuses, labels, projects and the cycle weeks are shared. Admins create them in Settings ▸ Teams.
+- Private teams: only the members an admin ticks see the team and its issues, in the app, the live updates and the MCP alike.
 - Live updates: every open window sees a change the moment it is saved.
 - Markdown descriptions and comments (TipTap editor), @mentions, reactions, an activity trail.
 - Google sign-in, invite-only: an admin adds an email, that person can sign in.

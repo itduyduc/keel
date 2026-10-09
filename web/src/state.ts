@@ -62,11 +62,17 @@ function connect() {
   };
 }
 
-async function resync() {
+// after a dropped stream anything may have changed; after being let into a team, only what's new
+async function resync({ keepDetail = false } = {}) {
   try {
     const data = await get<Bootstrap>('/api/bootstrap');
-    set({ data, detail: {} });
+    set({ data, detail: keepDetail ? state.detail : {} });
   } catch { /* the next reconnect tries again */ }
+}
+
+// the teams this window may show; a team taken away takes its issues with it
+function setTeams(teams: Team[]) {
+  setData((d) => ({ ...d, teams, issues: d.issues.filter((i) => teams.some((t) => t.id === i.teamId)) }));
 }
 
 function upsertIssue(issue: Issue) {
@@ -103,7 +109,8 @@ function apply(e: any) {
     case 'projects': setData((d) => ({ ...d, projects: e.projects as Project[] })); break;
     case 'users': setData((d) => ({ ...d, users: e.users as User[], me: (e.users as User[]).find((u) => u.id === d.me.id) || d.me })); break;
     case 'workspace': setData((d) => ({ ...d, workspace: e.workspace as Workspace })); break;
-    case 'teams': setData((d) => ({ ...d, teams: e.teams as Team[] })); break;
+    case 'teams': setTeams(e.teams as Team[]); break;
+    case 'resync': resync({ keepDetail: true }); break;
   }
 }
 
@@ -193,10 +200,12 @@ export async function saveProject(input: { id?: number; name?: string; icon?: st
 }
 
 // the reply goes straight into state: the event announcing it can arrive after we navigate to it
-export async function saveTeam(input: { key?: string; name?: string; color?: string; cyclesEnabled?: boolean }, existing?: Team) {
+export async function saveTeam(input: { key?: string; name?: string; color?: string; cyclesEnabled?: boolean; private?: boolean; memberIds?: number[] }, existing?: Team) {
   try {
     const t = existing ? await patchReq<Team>(`/api/teams/${existing.key}`, input) : await post<Team>('/api/teams', input);
-    setData((d) => ({ ...d, teams: d.teams.some((x) => x.id === t.id) ? d.teams.map((x) => (x.id === t.id ? t : x)) : [...d.teams, t] }));
+    const d = state.data;
+    if (d && t.canSee) setTeams(d.teams.some((x) => x.id === t.id) ? d.teams.map((x) => (x.id === t.id ? t : x)) : [...d.teams, t]);
+    else if (d) setTeams(d.teams.filter((x) => x.id !== t.id));
     return t;
   } catch (e) { fail(e); return null; }
 }

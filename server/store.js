@@ -64,15 +64,42 @@ export function createStore(db, { broadcast = () => {}, version = 'dev' } = {}) 
     return w;
   }
 
-  // ── teams: each owns a key (PIC), its issue numbers, and whether it runs cycles ──
-  const serializeTeam = (t) => ({ id: t.id, key: t.key, name: t.name, color: t.color, cyclesEnabled: !!t.cycles_enabled, createdAt: t.created_at });
+  // ── teams: each owns a key (PIC), its issue numbers, whether it runs cycles, and who sees it ──
   const teamRows = () => st('SELECT * FROM teams ORDER BY id').all();
-  const listTeams = () => teamRows().map(serializeTeam);
   const teamRow = (id) => st('SELECT * FROM teams WHERE id = ?').get(Number(id));
-  // by key or name, any case: what a person or Claude would type
+  // by key or name, any case: what a person or Claude would type. Says nothing about access.
   const findTeam = (ref) => st('SELECT * FROM teams WHERE key = ? OR name = ?').get(String(ref ?? '').trim(), String(ref ?? '').trim());
-  const firstTeam = () => teamRows()[0];
   const identifier = (row) => `${teamRow(row.team_id).key}-${row.number}`;
+  const teamKeys = () => teamRows().map((t) => t.key);
+  const memberIds = (teamId) => st('SELECT user_id FROM team_members WHERE team_id = ? ORDER BY user_id').all(teamId).map((r) => r.user_id);
+
+  // An open team is everyone's; a private one is its members' only, admins included,
+  // as in Linear: an admin sees that it exists and can add themselves, not its issues.
+  function canSee(userId, teamId) {
+    const t = teamRow(teamId);
+    return !!t && (!t.private || !!st('SELECT 1 FROM team_members WHERE team_id = ? AND user_id = ?').get(t.id, userId));
+  }
+  // GitHub and the cycle rollover work for everyone; a person only where they can see
+  const actorSees = (actor, teamId) => actor.kind !== 'user' || canSee(actor.user.id, teamId);
+  const visibleTeamRows = (actor) => teamRows().filter((t) => actorSees(actor, t.id));
+  const viewers = (teamId) => st('SELECT id FROM users WHERE active = 1').all().map((u) => u.id).filter((uid) => canSee(uid, teamId));
+
+  const serializeTeam = (t, userId) => ({
+    id: t.id, key: t.key, name: t.name, color: t.color, cyclesEnabled: !!t.cycles_enabled, createdAt: t.created_at,
+    private: !!t.private, memberIds: memberIds(t.id), canSee: canSee(userId, t.id),
+  });
+  // the teams this person works in; an admin's Settings also lists the private ones they are not in
+  const listTeams = (user) => teamRows().filter((t) => canSee(user.id, t.id)).map((t) => serializeTeam(t, user.id));
+  const teamsFor = (user) => (user.role === 'admin' ? teamRows().map((t) => serializeTeam(t, user.id)) : listTeams(user));
+
+  // each window gets its own list; whoever can newly see a team re-fetches to get its issues
+  function announceTeams(gained = new Set()) {
+    broadcast(null, (uid) => {
+      const u = userRow(uid);
+      return u ? { type: 'teams', teams: listTeams(u) } : null;
+    });
+    if (gained.size) broadcast(null, (uid) => (gained.has(uid) ? { type: 'resync' } : null));
+  }
 
   function teamFields(patch, t = null) {
     const out = {};
@@ -84,9 +111,25 @@ export function createStore(db, { broadcast = () => {}, version = 'dev' } = {}) 
     }
     if (patch.color !== undefined) out.color = hexColor(patch.color);
     if (patch.cyclesEnabled !== undefined) out.cycles_enabled = patch.cyclesEnabled ? 1 : 0;
+    if (patch.private !== undefined) out.private = patch.private ? 1 : 0;
     return out;
   }
 
+  function cleanMemberIds(ids) {
+    if (!Array.isArray(ids)) throw bad('memberIds is a list of member ids');
+    const out = [...new Set(ids.map(Number))];
+    for (const id of out) {
+      const u = userRow(id);
+      if (!u || !u.active) throw bad(`No active member with id ${id}`);
+    }
+    return out;
+  }
+  const setMembers = (teamId, ids) => {
+    st('DELETE FROM team_members WHERE team_id = ?').run(teamId);
+    for (const id of ids) st('INSERT INTO team_members (team_id, user_id, added_at) VALUES (?, ?, ?)').run(teamId, id, now());
+  };
+
+  // a private team starts with only the person who made it, as in Linear
   function createTeam(actor, input = {}) {
     requireAdmin(actor);
     const f = teamFields(input);
@@ -94,25 +137,43 @@ export function createStore(db, { broadcast = () => {}, version = 'dev' } = {}) 
     const key = String(input.key ?? '').trim().toUpperCase();
     if (!/^[A-Z]{1,5}$/.test(key)) throw bad('Identifier is 1 to 5 letters, like ENG');
     if (st('SELECT id FROM teams WHERE key = ?').get(key)) throw bad(`Another team already uses ${key}`);
-    const r = st('INSERT INTO teams (key, name, color, next_issue_number, cycles_enabled, created_at) VALUES (?, ?, ?, 1, ?, ?)')
-      .run(key, f.name, f.color ?? '#4ea7fc', f.cycles_enabled ?? 0, now());
-    broadcast({ type: 'teams', teams: listTeams() });
-    return serializeTeam(teamRow(r.lastInsertRowid));
+    const id = tx(db, () => {
+      const r = st('INSERT INTO teams (key, name, color, next_issue_number, cycles_enabled, private, created_at) VALUES (?, ?, ?, 1, ?, ?, ?)')
+        .run(key, f.name, f.color ?? '#4ea7fc', f.cycles_enabled ?? 0, f.private ?? 0, now());
+      if (f.private) setMembers(r.lastInsertRowid, [actor.user.id]);
+      return Number(r.lastInsertRowid);
+    });
+    announceTeams(new Set(viewers(id)));
+    return serializeTeam(teamRow(id), actor.user.id);
   }
 
-  // the key stays put: it is in every issue id, branch name and PR title already written
+  // The key stays put: it is in every issue id, branch name and PR title already written.
+  // Going private keeps everyone who could see the team until someone is unticked.
   function updateTeam(actor, ref, patch = {}) {
     requireAdmin(actor);
     const t = findTeam(ref);
     if (!t) throw notFound(`No team ${ref}`);
     if (patch.key !== undefined && String(patch.key).toUpperCase() !== t.key) throw bad("A team's identifier cannot change");
     const f = teamFields(patch, t);
+    const members = patch.memberIds !== undefined ? cleanMemberIds(patch.memberIds) : null;
+    const before = new Set(viewers(t.id));
     const cols = Object.keys(f);
-    if (cols.length) {
-      db.prepare(`UPDATE teams SET ${cols.map((c) => `${c} = ?`).join(', ')} WHERE id = ?`).run(...cols.map((c) => f[c]), t.id);
-      broadcast({ type: 'teams', teams: listTeams() });
+    tx(db, () => {
+      if (cols.length) db.prepare(`UPDATE teams SET ${cols.map((c) => `${c} = ?`).join(', ')} WHERE id = ?`).run(...cols.map((c) => f[c]), t.id);
+      if (members) setMembers(t.id, members);
+      else if (f.private && !t.private) setMembers(t.id, [...before]);
+    });
+    if (!cols.length && !members) return serializeTeam(teamRow(t.id), actor.user.id);
+    const after = new Set(viewers(t.id));
+    // whoever can no longer see the team comes off its issues, as Linear does when a team goes private
+    const lost = [...before].filter((uid) => !after.has(uid));
+    for (const uid of lost) {
+      for (const r of st('SELECT team_id, number FROM issues WHERE team_id = ? AND assignee_id = ? AND deleted_at IS NULL').all(t.id, uid)) {
+        updateIssue({ kind: 'system' }, identifier(r), { assigneeId: null });
+      }
     }
-    return serializeTeam(teamRow(t.id));
+    announceTeams(new Set([...after].filter((uid) => !before.has(uid))));
+    return serializeTeam(teamRow(t.id), actor.user.id);
   }
 
   // ── users ───────────────────────────────────────────────────────────────
@@ -412,34 +473,43 @@ export function createStore(db, { broadcast = () => {}, version = 'dev' } = {}) 
   }
 
   const issueRowById = (id) => st('SELECT * FROM issues WHERE id = ? AND deleted_at IS NULL').get(Number(id));
-  const listIssues = () => hydrate(st('SELECT * FROM issues WHERE deleted_at IS NULL ORDER BY team_id, number').all());
+  // every caller names who is asking: a person gets only the teams they can see
+  function listIssues(actor) {
+    const seen = new Set(visibleTeamRows(actor).map((t) => t.id));
+    return hydrate(st('SELECT * FROM issues WHERE deleted_at IS NULL ORDER BY team_id, number').all().filter((r) => seen.has(r.team_id)));
+  }
 
-  // "PIC-79" or "pic-79"; a bare "79" only while one team has a 79, so it never picks a team for you
-  function issueRow(ref) {
+  // "PIC-79" or "pic-79"; a bare "79" only while one team has a 79, so it never picks a team for you.
+  // An issue the actor cannot see does not exist for them, so it never makes a bare number ambiguous.
+  function issueRow(ref, actor) {
     const m = String(ref ?? '').trim().match(/^(?:([A-Za-z]+)-)?(\d+)$/);
     if (!m) return null;
     if (m[1]) {
       const t = st('SELECT id FROM teams WHERE key = ?').get(m[1]);
-      return t ? st('SELECT * FROM issues WHERE team_id = ? AND number = ? AND deleted_at IS NULL').get(t.id, Number(m[2])) : null;
+      const r = t && st('SELECT * FROM issues WHERE team_id = ? AND number = ? AND deleted_at IS NULL').get(t.id, Number(m[2]));
+      return r && actorSees(actor, r.team_id) ? r : null;
     }
-    const rows = st('SELECT * FROM issues WHERE number = ? AND deleted_at IS NULL').all(Number(m[2]));
+    const rows = st('SELECT * FROM issues WHERE number = ? AND deleted_at IS NULL').all(Number(m[2])).filter((r) => actorSees(actor, r.team_id));
     return rows.length === 1 ? rows[0] : null;
   }
-  function requireIssueRow(ref) {
-    const r = issueRow(ref);
+  function requireIssueRow(ref, actor) {
+    const r = issueRow(ref, actor);
     if (!r) throw notFound(`No issue ${ref}`);
     return r;
   }
-  const getIssue = (ref) => {
-    const r = issueRow(ref);
+  const getIssue = (ref, actor) => {
+    const r = issueRow(ref, actor);
     return r ? hydrate([r])[0] : null;
   };
+  const teamOfIssue = (issueId) => st('SELECT team_id FROM issues WHERE id = ?').get(issueId)?.team_id;
+  // news about a team's issues goes only to the people who can see that team
+  const tell = (teamId, event) => broadcast(event, (uid) => (canSee(uid, teamId) ? event : null));
   const getIssueById = (id) => {
     const r = issueRowById(id);
     return r ? hydrate([r])[0] : null;
   };
 
-  function validateIssue(input, { creating, row, team } = {}) {
+  function validateIssue(input, { creating, row, team, actor } = {}) {
     const out = {};
     const has = (k) => Object.prototype.hasOwnProperty.call(input, k) && input[k] !== undefined;
     if (creating || has('title')) {
@@ -467,6 +537,7 @@ export function createStore(db, { broadcast = () => {}, version = 'dev' } = {}) 
       else {
         const u = userRow(Number(input.assigneeId));
         if (!u || !u.active) throw bad(`No active member with id ${input.assigneeId}`);
+        if (!canSee(u.id, team.id)) throw bad(`${serializeUser(u).name} isn't a member of ${team.name}`);
         out.assignee_id = u.id;
       }
     }
@@ -504,7 +575,7 @@ export function createStore(db, { broadcast = () => {}, version = 'dev' } = {}) 
       if (input.parentId === null) out.parent_id = null;
       else {
         const parent = issueRowById(Number(input.parentId));
-        if (!parent) throw bad(`No issue with id ${input.parentId}`);
+        if (!parent || !actorSees(actor, parent.team_id)) throw bad(`No issue with id ${input.parentId}`);
         if (row) {
           // walk up from the new parent; meeting this issue means a loop
           for (let p = parent; p; p = p.parent_id ? issueRowById(p.parent_id) : null) {
@@ -561,11 +632,11 @@ export function createStore(db, { broadcast = () => {}, version = 'dev' } = {}) 
     label: (id) => st('SELECT name FROM labels WHERE id = ?').get(id)?.name,
   };
 
-  // no teamId: the first team, so a script written before there were two keeps working
+  // no teamId: the first team the actor can see, so a script written before there were two keeps working
   function createIssue(actor, input = {}) {
-    const team = input.teamId === undefined || input.teamId === null ? firstTeam() : teamRow(input.teamId);
-    if (!team) throw bad(`No team with id ${input.teamId}`);
-    const data = validateIssue(input, { creating: true, team });
+    const team = input.teamId === undefined || input.teamId === null ? visibleTeamRows(actor)[0] : teamRow(input.teamId);
+    if (!team || !actorSees(actor, team.id)) throw bad(input.teamId == null ? 'You are not in any team yet' : `No team with id ${input.teamId}`);
+    const data = validateIssue(input, { creating: true, team, actor });
     const statusId = data.status_id ?? workspace().defaultStatusId;
     const { issue, act } = tx(db, () => {
       const number = st('SELECT next_issue_number AS n FROM teams WHERE id = ?').get(team.id).n;
@@ -583,15 +654,15 @@ export function createStore(db, { broadcast = () => {}, version = 'dev' } = {}) 
       const act = addActivity(id, actor, 'created');
       return { issue: getIssueById(id), act };
     });
-    broadcast({ type: 'issue', issue });
-    broadcast({ type: 'activity', issueId: issue.id, activity: act });
+    tell(team.id, { type: 'issue', issue });
+    tell(team.id, { type: 'activity', issueId: issue.id, activity: act });
     return issue;
   }
 
   function updateIssue(actor, ref, input = {}) {
-    const row = requireIssueRow(ref);
+    const row = requireIssueRow(ref, actor);
     if (input.teamId !== undefined && Number(input.teamId) !== row.team_id) throw bad('Moving an issue to another team is not supported');
-    const data = validateIssue(input, { row, team: teamRow(row.team_id) });
+    const data = validateIssue(input, { row, team: teamRow(row.team_id), actor });
     const acts = [];
     const changed = tx(db, () => {
       const set = {};
@@ -634,14 +705,14 @@ export function createStore(db, { broadcast = () => {}, version = 'dev' } = {}) 
     });
     const issue = getIssueById(row.id);
     if (changed) {
-      broadcast({ type: 'issue', issue });
-      for (const a of acts) broadcast({ type: 'activity', issueId: row.id, activity: a });
+      tell(row.team_id, { type: 'issue', issue });
+      for (const a of acts) tell(row.team_id, { type: 'activity', issueId: row.id, activity: a });
     }
     return issue;
   }
 
   function deleteIssue(actor, ref) {
-    const row = requireIssueRow(ref);
+    const row = requireIssueRow(ref, actor);
     const children = st('SELECT id FROM issues WHERE parent_id = ? AND deleted_at IS NULL').all(row.id);
     tx(db, () => {
       st('UPDATE issues SET deleted_at = ?, updated_at = ? WHERE id = ?').run(now(), now(), row.id);
@@ -652,8 +723,8 @@ export function createStore(db, { broadcast = () => {}, version = 'dev' } = {}) 
         addActivity(c.id, actor, 'parent', identifier(row), null);
       }
     });
-    broadcast({ type: 'issue_deleted', id: row.id, number: row.number });
-    for (const c of children) broadcast({ type: 'issue', issue: getIssueById(c.id) });
+    tell(row.team_id, { type: 'issue_deleted', id: row.id, number: row.number });
+    for (const c of children) refreshIssue(c.id);
     return { deleted: identifier(row) };
   }
 
@@ -691,51 +762,51 @@ export function createStore(db, { broadcast = () => {}, version = 'dev' } = {}) 
 
   function addComment(actor, ref, body) {
     if (actor.kind !== 'user') throw forbidden('Only members can comment');
-    const row = requireIssueRow(ref);
+    const row = requireIssueRow(ref, actor);
     const b = cleanBody(body);
     const t = now();
     const r = st('INSERT INTO comments (issue_id, user_id, body, created_at, updated_at) VALUES (?, ?, ?, ?, ?)').run(row.id, actor.user.id, b, t, t);
     st('UPDATE issues SET updated_at = ? WHERE id = ?').run(t, row.id);
     const comment = serializeComment(st('SELECT * FROM comments WHERE id = ?').get(r.lastInsertRowid));
-    broadcast({ type: 'comment', issueId: row.id, comment });
+    tell(row.team_id, { type: 'comment', issueId: row.id, comment });
     return comment;
   }
 
-  function commentRow(id) {
+  function commentRow(id, actor) {
     const c = st('SELECT * FROM comments WHERE id = ? AND deleted_at IS NULL').get(Number(id));
-    if (!c) throw notFound('No such comment');
+    if (!c || !actorSees(actor, teamOfIssue(c.issue_id))) throw notFound('No such comment');
     return c;
   }
 
   function editComment(actor, id, body) {
-    const c = commentRow(id);
+    const c = commentRow(id, actor);
     if (actor.kind !== 'user' || actor.user.id !== c.user_id) throw forbidden('You can only edit your own comments');
     const b = cleanBody(body);
     if (b !== c.body) st('UPDATE comments SET body = ?, updated_at = ?, edited_at = ? WHERE id = ?').run(b, now(), now(), c.id);
     const comment = serializeComment(st('SELECT * FROM comments WHERE id = ?').get(c.id), reactionsFor([c.id]).get(c.id) || []);
-    broadcast({ type: 'comment', issueId: c.issue_id, comment });
+    tell(teamOfIssue(c.issue_id), { type: 'comment', issueId: c.issue_id, comment });
     return comment;
   }
 
   function deleteComment(actor, id) {
-    const c = commentRow(id);
+    const c = commentRow(id, actor);
     const admin = actor.kind === 'user' && actor.user.role === 'admin';
     if (!(actor.kind === 'user' && actor.user.id === c.user_id) && !admin) throw forbidden('You can only delete your own comments');
     st('UPDATE comments SET deleted_at = ? WHERE id = ?').run(now(), c.id);
-    broadcast({ type: 'comment_deleted', issueId: c.issue_id, commentId: c.id });
+    tell(teamOfIssue(c.issue_id), { type: 'comment_deleted', issueId: c.issue_id, commentId: c.id });
     return { deleted: c.id };
   }
 
   function toggleReaction(actor, commentId, emoji) {
     if (actor.kind !== 'user') throw forbidden('Only members can react');
-    const c = commentRow(commentId);
+    const c = commentRow(commentId, actor);
     const e = String(emoji ?? '').trim();
     if (!e || e.length > 16 || /\s/.test(e)) throw bad('emoji is a single emoji');
     const existing = st('SELECT 1 FROM reactions WHERE comment_id = ? AND user_id = ? AND emoji = ?').get(c.id, actor.user.id, e);
     if (existing) st('DELETE FROM reactions WHERE comment_id = ? AND user_id = ? AND emoji = ?').run(c.id, actor.user.id, e);
     else st('INSERT INTO reactions (comment_id, user_id, emoji, created_at) VALUES (?, ?, ?, ?)').run(c.id, actor.user.id, e, now());
     const reactions = reactionsFor([c.id]).get(c.id) || [];
-    broadcast({ type: 'reactions', issueId: c.issue_id, commentId: c.id, reactions });
+    tell(teamOfIssue(c.issue_id), { type: 'reactions', issueId: c.issue_id, commentId: c.id, reactions });
     return { commentId: c.id, reactions };
   }
 
@@ -744,8 +815,8 @@ export function createStore(db, { broadcast = () => {}, version = 'dev' } = {}) 
     return st('SELECT * FROM activity WHERE issue_id = ? ORDER BY created_at, id').all(issueId).map(serializeActivity);
   }
 
-  function issueDetail(ref) {
-    const issue = getIssue(ref);
+  function issueDetail(actor, ref) {
+    const issue = getIssue(ref, actor);
     if (!issue) throw notFound(`No issue ${ref}`);
     return { issue, comments: listComments(issue.id), activity: listActivity(issue.id) };
   }
@@ -768,8 +839,8 @@ export function createStore(db, { broadcast = () => {}, version = 'dev' } = {}) 
         st('UPDATE issues SET cycle = ?, updated_at = ? WHERE id = ?').run(current, now(), r.id);
         return addActivity(r.id, system, 'rolled_over', r.cycle, current);
       });
-      broadcast({ type: 'issue', issue: getIssueById(r.id) });
-      broadcast({ type: 'activity', issueId: r.id, activity: act });
+      tell(r.team_id, { type: 'issue', issue: getIssueById(r.id) });
+      tell(r.team_id, { type: 'activity', issueId: r.id, activity: act });
     }
     return rows.length;
   }
@@ -796,45 +867,47 @@ export function createStore(db, { broadcast = () => {}, version = 'dev' } = {}) 
     const r = st('INSERT OR IGNORE INTO issue_prs (issue_id, pr_id, linked_at) VALUES (?, ?, ?)').run(issueId, pr.id, now());
     if (!r.changes) return false;
     const act = addActivity(issueId, { kind: 'github' }, 'pr_linked', null, `${pr.repo}#${pr.number}`, { title: pr.title, url: pr.url });
-    broadcast({ type: 'activity', issueId, activity: act });
+    tell(teamOfIssue(issueId), { type: 'activity', issueId, activity: act });
     return true;
   }
 
   function notePullRequestState(issueId, pr) {
     const act = addActivity(issueId, { kind: 'github' }, 'pr_state', null, pr.state, { repo: pr.repo, number: pr.number, title: pr.title, url: pr.url });
-    broadcast({ type: 'activity', issueId, activity: act });
+    tell(teamOfIssue(issueId), { type: 'activity', issueId, activity: act });
   }
 
   const issueIdsForPr = (prId) => st('SELECT issue_id FROM issue_prs WHERE pr_id = ?').all(prId).map((r) => r.issue_id);
   const prsForIssue = (issueId) => st(`SELECT p.* FROM issue_prs ip JOIN pull_requests p ON p.id = ip.pr_id WHERE ip.issue_id = ?`).all(issueId).map(serializePr);
   const refreshIssue = (issueId) => {
     const issue = getIssueById(issueId);
-    if (issue) broadcast({ type: 'issue', issue });
+    if (issue) tell(issue.teamId, { type: 'issue', issue });
     return issue;
   };
 
   // ── bootstrap ──────────────────────────────────────────────────────────
   function bootstrap(user) {
+    const actor = { kind: 'user', user };
+    const teams = listTeams(user);
     return {
       version,
       me: serializeUser(userRow(user.id)),
       workspace: workspace(),
-      teams: listTeams(),
+      teams,
       // A window still running the UI from before teams refetches this when a deploy restarts
       // the server, and renders `team` until its ⌘R. Remove once teams have been live a while.
-      team: (({ key, name, color }) => ({ ...workspace(), key, name, color, icon: 'shop' }))(firstTeam()),
+      ...(teams[0] && { team: (({ key, name, color }) => ({ ...workspace(), key, name, color, icon: 'shop' }))(teams[0]) }),
       statuses: statuses(),
       users: listUsers(),
       labels: listLabels(),
       projects: listProjects(),
       cycles: cycles(),
-      issues: listIssues(),
+      issues: listIssues(actor),
     };
   }
 
   return {
     db, statuses, statusById, statusByName, workspace, updateWorkspace, currentCycle, cycles, rollOverCycles,
-    listTeams, findTeam, createTeam, updateTeam,
+    listTeams, teamsFor, teamKeys, findTeam, canSee, createTeam, updateTeam,
     serializeUser, listUsers, userRow, userByEmail, inviteUser, updateUser, ensureAdmins, recordSignIn,
     createSession, userForSession, deleteSession, listTokens, createToken, revokeToken, userForToken,
     listLabels, createLabel, updateLabel, listProjects, createProject, updateProject,

@@ -36,8 +36,12 @@ export interface Workspace {
   defaultStatusId: number; prOpenStatusId: number | null; prMergedStatusId: number | null; projectIcons: string[];
 }
 
-// each team owns its key (PIC), its issue numbers, and whether it runs cycles
-export interface Team { id: number; key: string; name: string; color: string; cyclesEnabled: boolean; createdAt: string }
+// each team owns its key (PIC), its issue numbers, whether it runs cycles, and who sees it:
+// everyone, or only memberIds when private. canSee is false only in an admin's Settings list.
+export interface Team {
+  id: number; key: string; name: string; color: string; cyclesEnabled: boolean; createdAt: string;
+  private: boolean; memberIds: number[]; canSee: boolean;
+}
 
 export interface Reaction { emoji: string; userIds: number[] }
 

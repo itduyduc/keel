@@ -375,6 +375,11 @@ code { font-family: var(--mono); }
 .color-grid button:disabled { cursor: default; opacity: 0.6; }
 .settings-section h2 .crumb { color: var(--text-2); cursor: pointer; }
 .settings-section > .btn { margin-bottom: 4px; }
+.field.access { max-width: 520px; }
+.member-list { display: flex; flex-direction: column; gap: 2px; margin: 4px 0 2px 22px; }
+.member-row { display: flex; align-items: center; gap: 8px; height: 32px; padding: 0 8px; border-radius: 6px; font-size: 13px; color: var(--text); }
+.member-row:hover { background: var(--bg-hover); }
+.member-row input { accent-color: var(--accent); }
 .icon-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 4px; padding: 8px; }
 .icon-grid button { height: 30px; border: 0; background: none; border-radius: 6px; display: flex; align-items: center; justify-content: center; }
 .icon-grid button:hover, .icon-grid button.on { background: #28282c; }

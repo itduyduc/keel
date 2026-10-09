@@ -61,27 +61,29 @@ export function createMcp(store, { version }) {
     if (i === undefined) throw new Error('priority is 0-4 or none/urgent/high/medium/low');
     return i;
   }
-  function resolveIssue(ref) {
-    const issue = store.getIssue(ref);
+  const as = (me) => ({ kind: 'user', user: me });
+  function resolveIssue(ref, me) {
+    const issue = store.getIssue(ref, as(me));
     if (!issue) throw new Error(`No issue ${ref}`);
     return issue;
   }
-  function resolveTeam(v) {
+  // a private team the caller is not in answers like one that does not exist
+  function resolveTeam(v, me) {
     const t = store.findTeam(v);
-    if (!t) throw new Error(`No team "${v}". Teams: ${store.listTeams().map((x) => `${x.key} (${x.name})`).join(', ')}`);
+    if (!t || !store.canSee(me.id, t.id)) throw new Error(`No team "${v}". Teams: ${store.listTeams(me).map((x) => `${x.key} (${x.name})`).join(', ')}`);
     return t.id;
   }
 
   // ── output shapes ────────────────────────────────────────────────────────
   // one pass over the small tables per call, not per issue
-  function lookups() {
+  function lookups(me) {
     return {
       users: new Map(store.listUsers().map((u) => [u.id, u])),
       labels: new Map(store.listLabels().map((l) => [l.id, l])),
       projects: new Map(store.listProjects().map((p) => [p.id, p])),
       statuses: new Map(store.statuses().map((s) => [s.id, s])),
-      identifiers: new Map(store.listIssues().map((x) => [x.id, x.identifier])),
-      teams: new Map(store.listTeams().map((t) => [t.id, t])),
+      identifiers: new Map(store.listIssues(as(me)).map((x) => [x.id, x.identifier])),
+      teams: new Map(store.listTeams(me).map((t) => [t.id, t])),
     };
   }
 
@@ -109,10 +111,10 @@ export function createMcp(store, { version }) {
   const branchName = (issue, user) => `${user.git_handle || user.email.split('@')[0]}/${issue.identifier.toLowerCase()}-${slugify(issue.title)}`;
 
   function full(issue, me) {
-    const L = lookups();
+    const L = lookups(me);
     const users = L.users;
-    const { comments, activity } = store.issueDetail(issue.identifier);
-    const children = store.listIssues().filter((x) => x.parentId === issue.id);
+    const { comments, activity } = store.issueDetail(as(me), issue.identifier);
+    const children = store.listIssues(as(me)).filter((x) => x.parentId === issue.id);
     return {
       ...brief(issue, L),
       description: issue.description,
@@ -127,7 +129,7 @@ export function createMcp(store, { version }) {
   // ── tools ────────────────────────────────────────────────────────────────
   const str = (description) => ({ type: 'string', description });
   // examples in the tool descriptions; the first team's key never changes
-  const key = store.listTeams()[0].key;
+  const key = store.teamKeys()[0];
   const tools = [
     {
       name: 'list_issues',
@@ -151,13 +153,13 @@ export function createMcp(store, { version }) {
       },
       annotations: { readOnlyHint: true },
       run(a, me) {
-        let list = store.listIssues();
+        let list = store.listIssues(as(me));
         const statusFilter = a.state ? resolveStatus(a.state) : null;
         const statusType = a.state && !store.statusByName(a.state) ? String(a.state).toLowerCase() : null;
-        if (a.team) { const tid = resolveTeam(a.team); list = list.filter((i) => i.teamId === tid); }
+        if (a.team) { const tid = resolveTeam(a.team, me); list = list.filter((i) => i.teamId === tid); }
         if (a.query) {
           const q = String(a.query).toLowerCase().trim();
-          const hit = store.getIssue(q);
+          const hit = store.getIssue(q, as(me));
           list = list.filter((i) => i.id === hit?.id || i.title.toLowerCase().includes(q) || i.description.toLowerCase().includes(q));
         }
         if (a.assignee !== undefined) {
@@ -170,12 +172,12 @@ export function createMcp(store, { version }) {
         if (a.label) { const [lid] = resolveLabels([a.label]); list = list.filter((i) => i.labelIds.includes(lid)); }
         if (a.project) { const pid = resolveProject(a.project); list = list.filter((i) => i.projectId === pid); }
         if (a.cycle !== undefined && a.cycle !== null) { const c = resolveCycle(a.cycle); list = list.filter((i) => i.cycle === c); }
-        if (a.parentId) { const parent = resolveIssue(a.parentId); list = list.filter((i) => i.parentId === parent.id); }
+        if (a.parentId) { const parent = resolveIssue(a.parentId, me); list = list.filter((i) => i.parentId === parent.id); }
         if (a.includeClosed === false) list = list.filter((i) => !store.DONE_TYPES.has(store.statusById(i.statusId).type));
         const key = a.orderBy === 'createdAt' ? 'createdAt' : 'updatedAt';
         list.sort((x, y) => (y[key] > x[key] ? 1 : -1));
         const limit = Math.min(250, Math.max(1, Number(a.limit) || 50));
-        const L = lookups();
+        const L = lookups(me);
         return { total: list.length, issues: list.slice(0, limit).map((i) => brief(i, L)) };
       },
     },
@@ -184,7 +186,7 @@ export function createMcp(store, { version }) {
       description: 'Get one issue in full: description, comments, sub-issues, pull requests, activity and the git branch name to use.',
       inputSchema: { type: 'object', properties: { id: str(`Issue id, e.g. ${key}-80`) }, required: ['id'] },
       annotations: { readOnlyHint: true },
-      run: (a, me) => full(resolveIssue(a.id), me),
+      run: (a, me) => full(resolveIssue(a.id, me), me),
     },
     {
       name: 'save_issue',
@@ -193,7 +195,7 @@ export function createMcp(store, { version }) {
         type: 'object',
         properties: {
           id: str(`Issue to update, e.g. ${key}-80. Omit to create.`),
-          team: str(`Team key or name for a new issue (list_teams); default ${key}. An issue cannot change team.`),
+          team: str('Team key or name for a new issue (list_teams); default your first team. An issue cannot change team.'),
           title: str('Title'),
           description: str('Markdown description (replaces the whole description)'),
           state: str('Status name, e.g. "In Progress"'),
@@ -209,7 +211,7 @@ export function createMcp(store, { version }) {
       },
       run(a, me) {
         const input = {};
-        if (a.team !== undefined) input.teamId = resolveTeam(a.team);
+        if (a.team !== undefined) input.teamId = resolveTeam(a.team, me);
         if (a.title !== undefined) input.title = a.title;
         if (a.description !== undefined) input.description = a.description;
         if (a.state !== undefined) input.statusId = resolveStatus(a.state);
@@ -218,12 +220,12 @@ export function createMcp(store, { version }) {
         if (a.project !== undefined) input.projectId = resolveProject(a.project);
         if (a.cycle !== undefined) input.cycle = resolveCycle(a.cycle);
         if (a.labels !== undefined) input.labelIds = resolveLabels(a.labels);
-        if (a.parentId !== undefined) input.parentId = a.parentId === null ? null : resolveIssue(a.parentId).id;
+        if (a.parentId !== undefined) input.parentId = a.parentId === null ? null : resolveIssue(a.parentId, me).id;
         if (a.estimate !== undefined) input.estimate = a.estimate;
         if (a.dueDate !== undefined) input.dueDate = a.dueDate;
-        const actor = { kind: 'user', user: me };
-        const issue = a.id ? store.updateIssue(actor, resolveIssue(a.id).identifier, input) : store.createIssue(actor, input);
-        return brief(issue, lookups());
+        const actor = as(me);
+        const issue = a.id ? store.updateIssue(actor, resolveIssue(a.id, me).identifier, input) : store.createIssue(actor, input);
+        return brief(issue, lookups(me));
       },
     },
     {
@@ -238,7 +240,7 @@ export function createMcp(store, { version }) {
         const actor = { kind: 'user', user: me };
         if (a.id !== undefined) return store.editComment(actor, a.id, a.body);
         if (!a.issueId) throw new Error('issueId is required to add a comment');
-        return store.addComment(actor, resolveIssue(a.issueId).identifier, a.body);
+        return store.addComment(actor, resolveIssue(a.issueId, me).identifier, a.body);
       },
     },
     {
@@ -246,9 +248,9 @@ export function createMcp(store, { version }) {
       description: 'List the comments on an issue, oldest first.',
       inputSchema: { type: 'object', properties: { issueId: str(`Issue id, e.g. ${key}-80`) }, required: ['issueId'] },
       annotations: { readOnlyHint: true },
-      run(a) {
+      run(a, me) {
         const users = new Map(store.listUsers().map((u) => [u.id, u]));
-        return { comments: store.listComments(resolveIssue(a.issueId).id).map((c) => ({ id: c.id, author: users.get(c.userId)?.name, body: c.body, createdAt: c.createdAt })) };
+        return { comments: store.listComments(resolveIssue(a.issueId, me).id).map((c) => ({ id: c.id, author: users.get(c.userId)?.name, body: c.body, createdAt: c.createdAt })) };
       },
     },
     {
@@ -256,7 +258,7 @@ export function createMcp(store, { version }) {
       description: 'The teams, with the key their issue ids start with and whether they run cycles.',
       inputSchema: { type: 'object', properties: {} },
       annotations: { readOnlyHint: true },
-      run: () => ({ teams: store.listTeams().map((t) => ({ key: t.key, name: t.name, cycles: t.cyclesEnabled })) }),
+      run: (a, me) => ({ teams: store.listTeams(me).map((t) => ({ key: t.key, name: t.name, cycles: t.cyclesEnabled, private: t.private })) }),
     },
     {
       name: 'list_issue_statuses',
@@ -295,11 +297,11 @@ export function createMcp(store, { version }) {
     },
   ];
 
-  // read at each initialize: a team created since start is in it
-  const instructions = () => {
-    const teams = store.listTeams();
+  // read at each initialize, for this caller: a team created since start is in it, a private one they are not in is not
+  const instructions = (me) => {
+    const teams = store.listTeams(me);
     return `Keel is ${store.workspace().name}'s issue tracker, a minimal Linear. Issues are <team key>-<number>; `
-      + `teams: ${teams.map((t) => `${t.key} (${t.name})`).join(', ')}. New issues go to ${teams[0].key} unless you pass team. `
+      + `teams: ${teams.map((t) => `${t.key} (${t.name})`).join(', ') || 'none yet'}. New issues go to ${teams[0]?.key ?? 'your first team'} unless you pass team. `
       + 'Descriptions and comments are markdown. Mention teammates as @handle (list_users). '
       + 'A pull request whose branch or title contains the issue id links itself; use get_issue for the branch name.';
   };
@@ -319,7 +321,7 @@ export function createMcp(store, { version }) {
           protocolVersion: PROTOCOL_VERSIONS.includes(asked) ? asked : PROTOCOL_VERSIONS[0],
           capabilities: { tools: { listChanged: false } },
           serverInfo: { name: 'keel', title: 'Keel', version },
-          instructions: instructions(),
+          instructions: instructions(me),
         });
       }
       case 'ping':

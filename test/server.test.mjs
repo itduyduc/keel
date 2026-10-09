@@ -1,6 +1,6 @@
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
-import { boot, signIn, client, webhook, prPayload, mcp, callTool, ADMIN } from './helpers.mjs';
+import { boot, signIn, client, webhook, prPayload, mcp, callTool, ADMIN, SYSTEM } from './helpers.mjs';
 import { cycleNumberAt, cycleRange, zonedMidnight } from '../server/cycles.js';
 
 let env, alice, bob;
@@ -249,9 +249,9 @@ test('cycles: unfinished work rolls into the current cycle, finished work stays'
   const open = (await alice.post('/api/issues', { title: 'Unfinished', cycle: cur - 1, statusId: status('Todo') })).body;
   const done = (await alice.post('/api/issues', { title: 'Finished', cycle: cur - 1, statusId: status('Done') })).body;
   store.rollOverCycles();
-  assert.equal(store.getIssue(open.identifier).cycle, cur);
-  assert.equal(store.getIssue(done.identifier).cycle, cur - 1);
-  const act = store.issueDetail(open.identifier).activity.at(-1);
+  assert.equal(store.getIssue(open.identifier, SYSTEM).cycle, cur);
+  assert.equal(store.getIssue(done.identifier, SYSTEM).cycle, cur - 1);
+  const act = store.issueDetail(SYSTEM, open.identifier).activity.at(-1);
   assert.equal(act.kind, 'rolled_over');
   assert.equal(act.actorKind, 'system');
 });

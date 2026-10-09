@@ -16,9 +16,9 @@ export function createApi(store, { github, version }) {
   add('GET', '/api/bootstrap', ({ user }) => store.bootstrap(user));
   add('GET', '/api/me', ({ user }) => store.serializeUser(user));
 
-  add('GET', '/api/issues', () => ({ issues: store.listIssues() }));
+  add('GET', '/api/issues', ({ actor }) => ({ issues: store.listIssues(actor) }));
   add('POST', '/api/issues', ({ actor, body }) => store.createIssue(actor, body));
-  add('GET', '/api/issues/:ref', ({ params }) => store.issueDetail(issueRef(params.ref)));
+  add('GET', '/api/issues/:ref', ({ actor, params }) => store.issueDetail(actor, issueRef(params.ref)));
   add('PATCH', '/api/issues/:ref', ({ actor, params, body }) => store.updateIssue(actor, issueRef(params.ref), body));
   add('DELETE', '/api/issues/:ref', ({ actor, params }) => store.deleteIssue(actor, issueRef(params.ref)));
 
@@ -47,7 +47,7 @@ export function createApi(store, { github, version }) {
   add('POST', '/api/tokens', ({ user, body }) => store.createToken(user, body.name));
   add('DELETE', '/api/tokens/:id', ({ user, params }) => ({ tokens: store.revokeToken(user, params.id) }));
 
-  add('GET', '/api/teams', () => ({ teams: store.listTeams() }));
+  add('GET', '/api/teams', ({ user }) => ({ teams: store.teamsFor(user) }));
   add('POST', '/api/teams', ({ actor, body }) => store.createTeam(actor, body));
   add('PATCH', '/api/teams/:ref', ({ actor, params, body }) => store.updateTeam(actor, decodeURIComponent(params.ref), body));
   add('PATCH', '/api/workspace', ({ actor, body }) => store.updateWorkspace(actor, body));
